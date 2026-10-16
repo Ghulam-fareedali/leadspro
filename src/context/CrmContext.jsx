@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useMemo, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useMemo, useCallback } from 'react';
 import { 
   INITIAL_AGENTS, 
   INITIAL_CUSTOMERS, 
@@ -9,11 +9,52 @@ import {
 const CrmContext = createContext(null);
 
 export const CrmProvider = ({ children }) => {
-  const [agents, setAgents] = useState(INITIAL_AGENTS);
-  const [customers, setCustomers] = useState(INITIAL_CUSTOMERS);
-  const [leads, setLeads] = useState(INITIAL_LEADS);
-  const [activeTab, setActiveTab] = useState('dashboard'); // 'dashboard', 'customers', 'leads', 'team'
+  // Load cached state or fallback to initial data
+  const [agents, setAgents] = useState(() => {
+    try {
+      const cached = localStorage.getItem('leadspro_agents');
+      return cached ? JSON.parse(cached) : INITIAL_AGENTS;
+    } catch {
+      return INITIAL_AGENTS;
+    }
+  });
+
+  const [customers, setCustomers] = useState(() => {
+    try {
+      const cached = localStorage.getItem('leadspro_customers');
+      return cached ? JSON.parse(cached) : INITIAL_CUSTOMERS;
+    } catch {
+      return INITIAL_CUSTOMERS;
+    }
+  });
+
+  const [leads, setLeads] = useState(() => {
+    try {
+      const cached = localStorage.getItem('leadspro_leads');
+      return cached ? JSON.parse(cached) : INITIAL_LEADS;
+    } catch {
+      return INITIAL_LEADS;
+    }
+  });
+
+  const [activeTab, setActiveTab] = useState('dashboard');
   const [toasts, setToasts] = useState([]);
+  const [dbStatus, setDbStatus] = useState({
+    connected: false,
+    mode: 'local',
+    message: 'Local Cache Mode'
+  });
+
+  // Keep localStorage in sync as robust fallback
+  useEffect(() => {
+    try {
+      localStorage.setItem('leadspro_agents', JSON.stringify(agents));
+      localStorage.setItem('leadspro_customers', JSON.stringify(customers));
+      localStorage.setItem('leadspro_leads', JSON.stringify(leads));
+    } catch (err) {
+      console.warn('Storage sync failed:', err);
+    }
+  }, [agents, customers, leads]);
 
   // Toast Notification Manager
   const addToast = useCallback((toast) => {
@@ -28,8 +69,64 @@ export const CrmProvider = ({ children }) => {
     setToasts(prev => prev.filter(t => t.id !== id));
   }, []);
 
+  // Sync with Backend API on mount
+  useEffect(() => {
+    const syncWithBackend = async () => {
+      try {
+        const healthRes = await fetch('/api/health');
+        if (healthRes.ok) {
+          const healthData = await healthRes.json();
+          const hasMongo = healthData.mongodbUriSet;
+
+          setDbStatus({
+            connected: hasMongo,
+            mode: hasMongo ? 'mongodb' : 'server-local',
+            message: hasMongo ? 'MongoDB Connected' : 'Express Server Running (Add MONGODB_URI to connect MongoDB Atlas)'
+          });
+
+          // Fetch agents from API
+          const [agentRes, custRes, leadRes] = await Promise.all([
+            fetch('/api/agents').catch(() => null),
+            fetch('/api/customers').catch(() => null),
+            fetch('/api/leads').catch(() => null)
+          ]);
+
+          if (agentRes && agentRes.ok) {
+            const agentData = await agentRes.json();
+            if (agentData.data && agentData.data.length > 0) {
+              setAgents(agentData.data);
+            }
+          }
+
+          if (custRes && custRes.ok) {
+            const custData = await custRes.json();
+            if (custData.data && custData.data.length > 0) {
+              setCustomers(custData.data);
+            }
+          }
+
+          if (leadRes && leadRes.ok) {
+            const leadData = await leadRes.json();
+            if (leadData.data && leadData.data.length > 0) {
+              setLeads(leadData.data);
+            }
+          }
+        }
+      } catch (err) {
+        // Backend not yet running or static mode: continue smoothly with local storage
+        setDbStatus({
+          connected: false,
+          mode: 'local',
+          message: 'Local Offline Cache'
+        });
+      }
+    };
+
+    syncWithBackend();
+  }, []);
+
   // 1. BULK UPLOAD CUSTOMERS (Module 1)
-  const bulkUploadCustomers = useCallback((newRecords, fileName = 'Imported_File.xlsx') => {
+  const bulkUploadCustomers = useCallback(async (newRecords, fileName = 'Imported_File.xlsx') => {
     const now = new Date();
     const formattedDate = now.toISOString().split('T')[0];
     
@@ -56,7 +153,17 @@ export const CrmProvider = ({ children }) => {
       };
     });
 
+    // Update local state immediately
     setCustomers(prev => [...formattedRecords, ...prev]);
+
+    // Send to backend API asynchronously
+    try {
+      fetch('/api/customers/bulk', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ records: formattedRecords })
+      }).catch(() => {});
+    } catch {}
 
     addToast({
       title: 'Bulk Data Ingested',
@@ -68,10 +175,7 @@ export const CrmProvider = ({ children }) => {
   }, [customers, addToast]);
 
   // 2. ASSIGN CUSTOMERS TO AGENT (The Crucial Workflow)
-  // When an Admin selects customers and assigns them to an Agent:
-  // - Customers status in Customers table changes to "Assigned"
-  // - New records instantly appear in the "Leads" section with status "Pending"
-  const assignCustomersToAgent = useCallback((customerIds, agentName) => {
+  const assignCustomersToAgent = useCallback(async (customerIds, agentName) => {
     if (!customerIds || customerIds.length === 0) {
       addToast({
         title: 'Selection Required',
@@ -94,10 +198,9 @@ export const CrmProvider = ({ children }) => {
     const formattedDate = now.toISOString().split('T')[0];
     const formattedTime = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
-    // Track matching customer details to spawn leads
     const customersToAssign = customers.filter(c => customerIds.includes(c.id));
 
-    // Update customers state: mark isAssigned: true and assignedTo: agentName
+    // Update customers state
     setCustomers(prevCustomers => {
       return prevCustomers.map(c => {
         if (customerIds.includes(c.id)) {
@@ -112,9 +215,8 @@ export const CrmProvider = ({ children }) => {
       });
     });
 
-    // Spawn corresponding Leads into the Leads pipeline with status "Pending"
+    // Spawn corresponding Leads
     const newLeads = customersToAssign.map((cust, idx) => {
-      // Generate clean unique lead ID
       const leadNum = 2000 + leads.length + idx + 1;
       return {
         id: `LEAD-${leadNum}`,
@@ -124,7 +226,7 @@ export const CrmProvider = ({ children }) => {
         email: cust.email,
         source: cust.source,
         assignedAgent: agentName,
-        status: 'Pending', // Default state when assigned (Gray or Yellow badge)
+        status: 'Pending',
         notes: `Assigned to ${agentName} on ${formattedDate}. Awaiting first contact.`,
         assignedDate: formattedDate,
         lastContactDate: null
@@ -132,6 +234,15 @@ export const CrmProvider = ({ children }) => {
     });
 
     setLeads(prevLeads => [...newLeads, ...prevLeads]);
+
+    // Send to backend API
+    try {
+      fetch('/api/customers/assign', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ customerIds, agentName })
+      }).catch(() => {});
+    } catch {}
 
     addToast({
       title: 'Workflow Assignment Complete',
@@ -143,9 +254,7 @@ export const CrmProvider = ({ children }) => {
   }, [customers, leads, addToast]);
 
   // 3. STATUS TRACKING & UPDATING (Module 2)
-  // Each row has an interactive status dropdown (Pending, Connected, Interested, Not Interested)
-  // Changing a lead's status dynamically updates the Dashboard analytics counts
-  const updateLeadStatus = useCallback((leadId, newStatus, note = '') => {
+  const updateLeadStatus = useCallback(async (leadId, newStatus, note = '') => {
     let leadName = '';
 
     setLeads(prevLeads => {
@@ -166,6 +275,15 @@ export const CrmProvider = ({ children }) => {
       });
     });
 
+    // Send to backend API
+    try {
+      fetch(`/api/leads/${leadId}/status`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: newStatus, notes: note })
+      }).catch(() => {});
+    } catch {}
+
     addToast({
       title: 'Pipeline Status Updated',
       message: `"${leadName}" marked as "${newStatus}". Dashboard analytics refreshed.`,
@@ -174,7 +292,7 @@ export const CrmProvider = ({ children }) => {
   }, [addToast]);
 
   // 4. ADD SINGLE CUSTOMER MANUALLY
-  const addSingleCustomer = useCallback((customerData) => {
+  const addSingleCustomer = useCallback(async (customerData) => {
     const existingIds = customers.map(c => {
       const num = parseInt(c.id.replace(/\D/g, ''), 10);
       return isNaN(num) ? 1000 : num;
@@ -196,6 +314,15 @@ export const CrmProvider = ({ children }) => {
 
     setCustomers(prev => [newCust, ...prev]);
 
+    // Send to API
+    try {
+      fetch('/api/customers', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newCust)
+      }).catch(() => {});
+    } catch {}
+
     addToast({
       title: 'Customer Added',
       message: `"${newCust.name}" added to Raw Customers pool.`,
@@ -206,14 +333,23 @@ export const CrmProvider = ({ children }) => {
   }, [customers, addToast]);
 
   // 5. DELETE CUSTOMERS (Single or Bulk, including assigned & imported ones)
-  const deleteCustomers = useCallback((customerIds) => {
+  const deleteCustomers = useCallback(async (customerIds) => {
     if (!customerIds || customerIds.length === 0) return;
 
     // Filter out from customers state
     setCustomers(prev => prev.filter(c => !customerIds.includes(c.id)));
 
-    // Also remove from leads state if any of these customers were assigned as leads
+    // Also remove from leads state
     setLeads(prev => prev.filter(l => !customerIds.includes(l.customerId)));
+
+    // Send to backend API
+    try {
+      fetch('/api/customers/bulk', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ customerIds })
+      }).catch(() => {});
+    } catch {}
 
     addToast({
       title: 'Deleted Successfully',
@@ -222,8 +358,30 @@ export const CrmProvider = ({ children }) => {
     });
   }, [addToast]);
 
-  // 6. UNASSIGN CUSTOMERS (Revert back to Unassigned Pool without deleting)
-  const unassignCustomers = useCallback((customerIds) => {
+  // 5b. DELETE ALL CUSTOMERS & LEADS (Full wipe of raw pool and pipeline)
+  const deleteAllCustomers = useCallback(async () => {
+    setCustomers([]);
+    setLeads([]);
+
+    try {
+      localStorage.setItem('leadspro_customers', JSON.stringify([]));
+      localStorage.setItem('leadspro_leads', JSON.stringify([]));
+      await fetch('/api/customers/all', {
+        method: 'DELETE'
+      });
+    } catch (e) {
+      console.warn('API error during deleteAllCustomers:', e);
+    }
+
+    addToast({
+      title: 'Database Wiped',
+      message: 'All customer records and linked pipeline leads have been deleted from the database.',
+      type: 'warning'
+    });
+  }, [addToast]);
+
+  // 6. UNASSIGN CUSTOMERS
+  const unassignCustomers = useCallback(async (customerIds) => {
     if (!customerIds || customerIds.length === 0) return;
 
     setCustomers(prev => prev.map(c => {
@@ -238,8 +396,15 @@ export const CrmProvider = ({ children }) => {
       return c;
     }));
 
-    // Remove from leads
     setLeads(prev => prev.filter(l => !customerIds.includes(l.customerId)));
+
+    try {
+      fetch('/api/customers/unassign', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ customerIds })
+      }).catch(() => {});
+    } catch {}
 
     addToast({
       title: 'Assignment Reverted',
@@ -248,9 +413,16 @@ export const CrmProvider = ({ children }) => {
     });
   }, [addToast]);
 
-  // 7. DELETE SINGLE LEAD (From Leads pipeline)
-  const deleteLead = useCallback((leadId) => {
+  // 7. DELETE SINGLE LEAD
+  const deleteLead = useCallback(async (leadId) => {
     setLeads(prev => prev.filter(l => l.id !== leadId));
+
+    try {
+      fetch(`/api/leads/${leadId}`, {
+        method: 'DELETE'
+      }).catch(() => {});
+    } catch {}
+
     addToast({
       title: 'Lead Removed',
       message: 'Lead removed from active pipeline.',
@@ -258,8 +430,8 @@ export const CrmProvider = ({ children }) => {
     });
   }, [addToast]);
 
-  // 8. ADD NEW TEAM MEMBER (User defines name, role, email)
-  const addAgent = useCallback((agentData) => {
+  // 8. ADD NEW TEAM MEMBER
+  const addAgent = useCallback(async (agentData) => {
     if (!agentData.name?.trim()) {
       addToast({
         title: 'Name Required',
@@ -293,6 +465,14 @@ export const CrmProvider = ({ children }) => {
 
     setAgents(prev => [...prev, newAgent]);
 
+    try {
+      fetch('/api/agents', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newAgent)
+      }).catch(() => {});
+    } catch {}
+
     addToast({
       title: 'Team Member Added',
       message: `${newAgent.name} is now available in your team & lead assignment dropdowns.`,
@@ -302,8 +482,8 @@ export const CrmProvider = ({ children }) => {
     return newAgent;
   }, [agents, addToast]);
 
-  // 9. UPDATE TEAM MEMBER (Rename or edit role/details)
-  const updateAgent = useCallback((agentId, updatedData) => {
+  // 9. UPDATE TEAM MEMBER
+  const updateAgent = useCallback(async (agentId, updatedData) => {
     let oldName = '';
     const newName = updatedData.name?.trim() || '';
 
@@ -322,11 +502,18 @@ export const CrmProvider = ({ children }) => {
       return agent;
     }));
 
-    // If the name changed, seamlessly update matching assignedTo in customers & assignedAgent in leads
     if (oldName && newName && oldName !== newName) {
       setCustomers(prev => prev.map(c => c.assignedTo === oldName ? { ...c, assignedTo: newName } : c));
       setLeads(prev => prev.map(l => l.assignedAgent === oldName ? { ...l, assignedAgent: newName } : l));
     }
+
+    try {
+      fetch(`/api/agents/${agentId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updatedData)
+      }).catch(() => {});
+    } catch {}
 
     addToast({
       title: 'Team Member Updated',
@@ -336,16 +523,14 @@ export const CrmProvider = ({ children }) => {
   }, [addToast]);
 
   // 10. REMOVE TEAM MEMBER
-  const removeAgent = useCallback((agentId) => {
+  const removeAgent = useCallback(async (agentId) => {
     const targetAgent = agents.find(a => a.id === agentId);
     if (!targetAgent) return;
 
     const agentName = targetAgent.name;
 
-    // Remove from agents
     setAgents(prev => prev.filter(a => a.id !== agentId));
 
-    // Return any assigned customers for this agent back to Unassigned Pool
     setCustomers(prev => prev.map(c => {
       if (c.assignedTo === agentName) {
         return {
@@ -358,8 +543,13 @@ export const CrmProvider = ({ children }) => {
       return c;
     }));
 
-    // Clean up their leads from the active pipeline
     setLeads(prev => prev.filter(l => l.assignedAgent !== agentName));
+
+    try {
+      fetch(`/api/agents/${agentId}`, {
+        method: 'DELETE'
+      }).catch(() => {});
+    } catch {}
 
     addToast({
       title: 'Member Removed from Team',
@@ -368,20 +558,18 @@ export const CrmProvider = ({ children }) => {
     });
   }, [agents, addToast]);
 
-  // 5. COMPUTED DASHBOARD & ANALYTICS METRICS (Module 3)
+  // 11. COMPUTED DASHBOARD & ANALYTICS METRICS
   const analytics = useMemo(() => {
     const totalCustomersPool = customers.length;
     const totalLeadsAssigned = leads.length;
     const unassignedCount = customers.filter(c => !c.isAssigned).length;
     const assignedCustomersCount = customers.filter(c => c.isAssigned).length;
 
-    // Status counts across all assigned leads
     const pendingCount = leads.filter(l => l.status === 'Pending').length;
     const connectedCount = leads.filter(l => l.status === 'Connected').length;
     const interestedCount = leads.filter(l => l.status === 'Interested').length;
     const notInterestedCount = leads.filter(l => l.status === 'Not Interested').length;
 
-    // Conversion / Interest rate
     const interestRate = totalLeadsAssigned > 0 
       ? Math.round((interestedCount / totalLeadsAssigned) * 100) 
       : 0;
@@ -390,7 +578,6 @@ export const CrmProvider = ({ children }) => {
       ? Math.round(((totalLeadsAssigned - pendingCount) / totalLeadsAssigned) * 100)
       : 0;
 
-    // Status breakdown percentages
     const statusPercentages = {
       Pending: totalLeadsAssigned > 0 ? Math.round((pendingCount / totalLeadsAssigned) * 100) : 0,
       Connected: totalLeadsAssigned > 0 ? Math.round((connectedCount / totalLeadsAssigned) * 100) : 0,
@@ -398,7 +585,6 @@ export const CrmProvider = ({ children }) => {
       'Not Interested': totalLeadsAssigned > 0 ? Math.round((notInterestedCount / totalLeadsAssigned) * 100) : 0,
     };
 
-    // Agent metrics breakdown
     const agentBreakdown = agents.map(agent => {
       const agentLeads = leads.filter(l => l.assignedAgent === agent.name);
       const total = agentLeads.length;
@@ -449,11 +635,13 @@ export const CrmProvider = ({ children }) => {
     updateLeadStatus,
     addSingleCustomer,
     deleteCustomers,
+    deleteAllCustomers,
     unassignCustomers,
     deleteLead,
     addAgent,
     updateAgent,
     removeAgent,
+    dbStatus,
     analytics,
     statusConfig: LEAD_STATUS_CONFIG
   };

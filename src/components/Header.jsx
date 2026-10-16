@@ -14,7 +14,7 @@ import {
 } from 'lucide-react';
 
 export const Header = ({ onOpenUpload, searchQuery, setSearchQuery }) => {
-  const { analytics, customers, leads, activeTab } = useCrm();
+  const { analytics, customers, leads, activeTab, dbStatus } = useCrm();
   const [showNotifications, setShowNotifications] = useState(false);
   const notifRef = useRef(null);
 
@@ -59,6 +59,23 @@ export const Header = ({ onOpenUpload, searchQuery, setSearchQuery }) => {
         <div className="hidden md:flex items-center gap-2 px-3 py-1.5 bg-slate-50 border border-slate-200/90 rounded-lg text-xs font-semibold text-slate-600">
           <Calendar className="w-3.5 h-3.5 text-slate-400" />
           <span>{dateStr}</span>
+        </div>
+
+        {/* Database Status Badge */}
+        <div 
+          className={`hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold border transition-all ${
+            dbStatus?.connected 
+              ? 'bg-emerald-50 text-emerald-700 border-emerald-200' 
+              : dbStatus?.mode === 'server-local'
+              ? 'bg-blue-50 text-blue-700 border-blue-200'
+              : 'bg-slate-100 text-slate-600 border-slate-200'
+          }`}
+          title={dbStatus?.message || 'Database status'}
+        >
+          <span className={`w-2 h-2 rounded-full ${dbStatus?.connected ? 'bg-emerald-500 animate-pulse' : dbStatus?.mode === 'server-local' ? 'bg-blue-500' : 'bg-slate-400'}`} />
+          <span className="text-[11px] font-bold">
+            {dbStatus?.connected ? 'MongoDB Live' : dbStatus?.mode === 'server-local' ? 'API Active' : 'Offline / Local'}
+          </span>
         </div>
 
         {/* Bulk Upload Button (Prominent) */}

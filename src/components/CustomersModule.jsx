@@ -32,6 +32,7 @@ export const CustomersModule = ({ onOpenUpload, searchQuery, setSearchQuery }) =
     agents, 
     assignCustomersToAgent, 
     deleteCustomers,
+    deleteAllCustomers,
     unassignCustomers,
     analytics, 
     setActiveTab,
@@ -136,9 +137,23 @@ export const CustomersModule = ({ onOpenUpload, searchQuery, setSearchQuery }) =
     setDeleteModalState({
       isOpen: true,
       targetIds: selectedIds,
+      isWipeAll: false,
       title: `Delete ${selectedIds.length} Selected Customer(s)?`,
       message: `You are about to permanently delete ${selectedIds.length} customer record(s).`,
       assignedCount
+    });
+  };
+
+  // Open delete confirmation modal for wipe all
+  const handlePromptDeleteAll = () => {
+    if (customers.length === 0) return;
+    setDeleteModalState({
+      isOpen: true,
+      targetIds: [],
+      isWipeAll: true,
+      title: `Delete ALL ${customers.length} Customer Records?`,
+      message: `This will permanently delete all ${customers.length} customer records and any active leads from MongoDB Atlas database and local cache. You can re-upload fresh Excel sheets anytime.`,
+      assignedCount: analytics.assignedCustomersCount
     });
   };
 
@@ -147,6 +162,7 @@ export const CustomersModule = ({ onOpenUpload, searchQuery, setSearchQuery }) =
     setDeleteModalState({
       isOpen: true,
       targetIds: [customer.id],
+      isWipeAll: false,
       title: `Delete "${customer.name}"?`,
       message: `This will remove customer record ${customer.id} from your database.`,
       assignedCount: customer.isAssigned ? 1 : 0
@@ -155,9 +171,14 @@ export const CustomersModule = ({ onOpenUpload, searchQuery, setSearchQuery }) =
 
   // Confirm delete execution
   const handleConfirmDelete = () => {
-    deleteCustomers(deleteModalState.targetIds);
-    setSelectedIds(prev => prev.filter(id => !deleteModalState.targetIds.includes(id)));
-    setDeleteModalState({ isOpen: false, targetIds: [], title: '', message: '', assignedCount: 0 });
+    if (deleteModalState.isWipeAll) {
+      deleteAllCustomers();
+      setSelectedIds([]);
+    } else {
+      deleteCustomers(deleteModalState.targetIds);
+      setSelectedIds(prev => prev.filter(id => !deleteModalState.targetIds.includes(id)));
+    }
+    setDeleteModalState({ isOpen: false, targetIds: [], title: '', message: '', assignedCount: 0, isWipeAll: false });
   };
 
   // Bulk unassign
@@ -407,6 +428,17 @@ export const CustomersModule = ({ onOpenUpload, searchQuery, setSearchQuery }) =
           >
             <span>Select Only Assigned ({analytics.assignedCustomersCount})</span>
           </button>
+
+          {customers.length > 0 && (
+            <button
+              onClick={handlePromptDeleteAll}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-rose-200 bg-rose-50/70 hover:bg-rose-100 text-rose-700 font-semibold text-xs transition-colors cursor-pointer"
+              title="Permanently wipe all customer records and linked leads from MongoDB database"
+            >
+              <Trash2 className="w-3.5 h-3.5 text-rose-600" />
+              <span>Delete All Records ({customers.length})</span>
+            </button>
+          )}
         </div>
 
         <div className="flex items-center gap-2">
@@ -598,7 +630,7 @@ export const CustomersModule = ({ onOpenUpload, searchQuery, setSearchQuery }) =
               <div className="pt-2 flex items-center justify-center gap-3">
                 <button
                   type="button"
-                  onClick={() => setDeleteModalState({ isOpen: false, targetIds: [], title: '', message: '', assignedCount: 0 })}
+                  onClick={() => setDeleteModalState({ isOpen: false, targetIds: [], title: '', message: '', assignedCount: 0, isWipeAll: false })}
                   className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100 border border-slate-200 transition-colors"
                 >
                   Cancel
@@ -609,7 +641,7 @@ export const CustomersModule = ({ onOpenUpload, searchQuery, setSearchQuery }) =
                   className="px-5 py-2 rounded-xl text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white shadow-md shadow-rose-600/30 transition-all flex items-center gap-1.5"
                 >
                   <Trash2 className="w-4 h-4" />
-                  <span>Yes, Delete Record(s)</span>
+                  <span>{deleteModalState.isWipeAll ? 'Yes, Delete All Records' : 'Yes, Delete Record(s)'}</span>
                 </button>
               </div>
             </div>
