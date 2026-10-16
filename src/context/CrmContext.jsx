@@ -6,6 +6,21 @@ import {
   LEAD_STATUS_CONFIG 
 } from '../data/customerData';
 
+// Clean test data version marker - ensures any cached dummy records from previous tests are cleared
+const DATA_STORAGE_VERSION = 'v2_clean_zero_data';
+if (typeof window !== 'undefined') {
+  try {
+    const cachedVer = localStorage.getItem('leadspro_storage_version');
+    if (cachedVer !== DATA_STORAGE_VERSION) {
+      localStorage.removeItem('leadspro_customers');
+      localStorage.removeItem('leadspro_leads');
+      localStorage.setItem('leadspro_storage_version', DATA_STORAGE_VERSION);
+    }
+  } catch (e) {
+    console.warn('Storage version check failed:', e);
+  }
+}
+
 const CrmContext = createContext(null);
 
 export const CrmProvider = ({ children }) => {

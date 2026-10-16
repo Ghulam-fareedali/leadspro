@@ -490,12 +490,28 @@ export const CustomersModule = ({ onOpenUpload, searchQuery, setSearchQuery }) =
             <tbody className="divide-y divide-slate-100">
               {filteredCustomers.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="py-12 text-center text-slate-400">
-                    <Database className="w-8 h-8 mx-auto mb-2 opacity-40" />
-                    <p className="font-semibold text-slate-600">No customers found</p>
-                    <p className="text-xs text-slate-400 mt-0.5">
-                      Upload your Excel/CSV document or try adjusting the filters.
+                  <td colSpan={7} className="py-16 text-center text-slate-400">
+                    <Database className="w-10 h-10 mx-auto mb-3 opacity-30 text-blue-600" />
+                    <p className="font-bold text-slate-700 text-sm">No customers in pool</p>
+                    <p className="text-xs text-slate-400 mt-1 max-w-sm mx-auto">
+                      All test records have been cleared. Upload your Excel/CSV spreadsheet or add your first customer to get started.
                     </p>
+                    <div className="mt-4 flex items-center justify-center gap-3">
+                      <button
+                        onClick={onOpenUpload}
+                        className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow-sm shadow-blue-500/25 transition-all inline-flex items-center gap-1.5 cursor-pointer"
+                      >
+                        <Upload className="w-4 h-4" />
+                        <span>Upload Excel (.xlsx / .csv)</span>
+                      </button>
+                      <button
+                        onClick={() => setIsAddModalOpen(true)}
+                        className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition-all inline-flex items-center gap-1.5 cursor-pointer"
+                      >
+                        <UserPlus className="w-4 h-4" />
+                        <span>Add Single Customer</span>
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ) : (
