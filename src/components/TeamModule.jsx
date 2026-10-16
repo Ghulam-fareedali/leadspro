@@ -19,7 +19,9 @@ import {
   AlertCircle,
   Sparkles,
   ShieldCheck,
-  UserCheck
+  UserCheck,
+  KeyRound,
+  Lock
 } from 'lucide-react';
 
 export const TeamModule = () => {
@@ -29,6 +31,7 @@ export const TeamModule = () => {
     analytics, 
     addAgent, 
     updateAgent, 
+    updateAgentPin,
     removeAgent, 
     setActiveTab 
   } = useCrm();
@@ -43,7 +46,8 @@ export const TeamModule = () => {
       role: 'Sales Representative',
       email: '',
       phone: '0300-1234567',
-      avatar: ''
+      avatar: '',
+      pin: '1234'
     }
   });
 
@@ -51,6 +55,13 @@ export const TeamModule = () => {
   const [deleteModal, setDeleteModal] = useState({
     isOpen: false,
     agent: null
+  });
+
+  // Modal State for Quick PIN Assignment
+  const [pinModal, setPinModal] = useState({
+    isOpen: false,
+    agent: null,
+    newPin: ''
   });
 
   const [formError, setFormError] = useState('');
@@ -67,7 +78,8 @@ export const TeamModule = () => {
         role: 'Sales Representative',
         email: '',
         phone: '0300-1234567',
-        avatar: ''
+        avatar: '',
+        pin: '1234'
       }
     });
   };
@@ -84,9 +96,27 @@ export const TeamModule = () => {
         role: agent.role,
         email: agent.email,
         phone: agent.phone || '0300-1234567',
-        avatar: agent.avatar
+        avatar: agent.avatar,
+        pin: agent.pin || '1234'
       }
     });
+  };
+
+  // Open Quick PIN Assignment Modal
+  const handleOpenPinModal = (agent) => {
+    setPinModal({
+      isOpen: true,
+      agent,
+      newPin: agent.pin || '1234'
+    });
+  };
+
+  // Save PIN from Quick Modal
+  const handleSavePin = (e) => {
+    e.preventDefault();
+    if (!pinModal.newPin.trim()) return;
+    updateAgentPin(pinModal.agent.id, pinModal.newPin.trim());
+    setPinModal({ isOpen: false, agent: null, newPin: '' });
   };
 
   // Submit Add or Edit
@@ -103,7 +133,7 @@ export const TeamModule = () => {
       updateAgent(agentModal.agentId, agentModal.formData);
     }
 
-    setAgentModal({ isOpen: false, mode: 'add', agentId: null, formData: { name: '', role: '', email: '', phone: '', avatar: '' } });
+    setAgentModal({ isOpen: false, mode: 'add', agentId: null, formData: { name: '', role: '', email: '', phone: '', avatar: '', pin: '1234' } });
   };
 
   // Open prompt to delete agent
@@ -249,6 +279,30 @@ export const TeamModule = () => {
                     />
                   </div>
                 </div>
+
+                {/* Security PIN Section (Admin Manageable) */}
+                <div className="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 border border-slate-200/90 text-xs">
+                  <div className="flex items-center gap-2">
+                    <div className="w-7 h-7 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center">
+                      <KeyRound className="w-3.5 h-3.5" />
+                    </div>
+                    <div>
+                      <span className="text-[10px] uppercase font-bold text-slate-400 block">Portal PIN</span>
+                      <span className="font-mono font-bold text-slate-800 text-xs">
+                        {agent.pin || '1234'}
+                      </span>
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={() => handleOpenPinModal(agent)}
+                    className="px-2.5 py-1 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 text-[11px] font-bold transition-all flex items-center gap-1 cursor-pointer"
+                    title="Assign or change login PIN for this agent"
+                  >
+                    <KeyRound className="w-3 h-3" />
+                    <span>Change PIN</span>
+                  </button>
+                </div>
               </div>
 
               {/* View Leads Action */}
@@ -372,6 +426,31 @@ export const TeamModule = () => {
                 </div>
               </div>
 
+              {/* Portal Login PIN */}
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">
+                  Portal Login PIN <span className="text-rose-500">*</span>
+                </label>
+                <div className="relative">
+                  <KeyRound className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <input
+                    type="text"
+                    required
+                    maxLength={6}
+                    value={agentModal.formData.pin}
+                    onChange={(e) => setAgentModal({
+                      ...agentModal,
+                      formData: { ...agentModal.formData, pin: e.target.value.replace(/\D/g, '') }
+                    })}
+                    placeholder="1234"
+                    className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 font-mono font-bold tracking-wider focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 transition-all"
+                  />
+                </div>
+                <p className="text-[10px] text-slate-400 mt-0.5">
+                  The team member will enter this PIN on the login screen to access their leads.
+                </p>
+              </div>
+
               {/* Avatar Preset Picker */}
               <div>
                 <label className="block font-semibold text-slate-700 mb-1.5">
@@ -474,6 +553,75 @@ export const TeamModule = () => {
                 </button>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* 4. QUICK PIN ASSIGNMENT MODAL (ADMIN SETTING) */}
+      {pinModal.isOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl w-full max-w-sm overflow-hidden animate-in zoom-in-95 duration-200">
+            <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/70">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-xl bg-indigo-100 text-indigo-600 flex items-center justify-center">
+                  <KeyRound className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-slate-800">Assign Member PIN</h3>
+                  <p className="text-[11px] text-slate-500">Admin Security Settings</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setPinModal({ isOpen: false, agent: null, newPin: '' })}
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSavePin} className="p-6 space-y-4">
+              <div className="text-center p-3 rounded-xl bg-slate-50 border border-slate-200/80 space-y-1">
+                <p className="text-[11px] text-slate-400 uppercase font-semibold">Assigning PIN for</p>
+                <p className="text-sm font-bold text-slate-800">{pinModal.agent?.name}</p>
+                <p className="text-[11px] text-indigo-600 font-medium">{pinModal.agent?.role}</p>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="block text-xs font-semibold text-slate-700 text-center">
+                  New Security PIN (4 to 6 Digits)
+                </label>
+                <input
+                  type="text"
+                  required
+                  maxLength={6}
+                  value={pinModal.newPin}
+                  onChange={(e) => setPinModal({ ...pinModal, newPin: e.target.value.replace(/\D/g, '') })}
+                  placeholder="1234"
+                  className="w-full py-2.5 px-3 text-center font-mono text-xl font-bold tracking-widest bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600"
+                  autoFocus
+                />
+                <p className="text-[11px] text-slate-400 text-center">
+                  This agent will use this PIN to log in to their personal portal.
+                </p>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setPinModal({ isOpen: false, agent: null, newPin: '' })}
+                  className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100 border border-slate-200 cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-md shadow-indigo-600/30 transition-all cursor-pointer"
+                >
+                  Save & Assign PIN
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

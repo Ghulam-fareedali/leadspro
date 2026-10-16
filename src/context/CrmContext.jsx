@@ -13,9 +13,26 @@ export const CrmProvider = ({ children }) => {
   const [agents, setAgents] = useState(() => {
     try {
       const cached = localStorage.getItem('leadspro_agents');
-      return cached ? JSON.parse(cached) : INITIAL_AGENTS;
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        return parsed.map((a, idx) => ({
+          ...a,
+          pin: a.pin || INITIAL_AGENTS[idx]?.pin || "1234"
+        }));
+      }
+      return INITIAL_AGENTS;
     } catch {
       return INITIAL_AGENTS;
+    }
+  });
+
+  // Authentication: null (show login screen) | { type: 'admin', ... } | { type: 'agent', ... }
+  const [auth, setAuth] = useState(() => {
+    try {
+      const cached = localStorage.getItem('leadspro_auth');
+      return cached ? JSON.parse(cached) : null;
+    } catch {
+      return null;
     }
   });
 
@@ -51,10 +68,15 @@ export const CrmProvider = ({ children }) => {
       localStorage.setItem('leadspro_agents', JSON.stringify(agents));
       localStorage.setItem('leadspro_customers', JSON.stringify(customers));
       localStorage.setItem('leadspro_leads', JSON.stringify(leads));
+      if (auth) {
+        localStorage.setItem('leadspro_auth', JSON.stringify(auth));
+      } else {
+        localStorage.removeItem('leadspro_auth');
+      }
     } catch (err) {
       console.warn('Storage sync failed:', err);
     }
-  }, [agents, customers, leads]);
+  }, [agents, customers, leads, auth]);
 
   // Toast Notification Manager
   const addToast = useCallback((toast) => {
@@ -460,7 +482,8 @@ export const CrmProvider = ({ children }) => {
       email: agentData.email?.trim() || `${nameTrimmed.toLowerCase().replace(/[^a-z0-9]/g, '')}@omniflow.io`,
       phone: agentData.phone?.trim() || "0300-1234567",
       avatar: pickedAvatar,
-      color: "blue"
+      color: "blue",
+      pin: agentData.pin?.trim() || "1234"
     };
 
     setAgents(prev => [...prev, newAgent]);
@@ -496,7 +519,8 @@ export const CrmProvider = ({ children }) => {
           role: updatedData.role?.trim() || agent.role,
           email: updatedData.email?.trim() || agent.email,
           phone: updatedData.phone?.trim() || agent.phone,
-          avatar: updatedData.avatar || agent.avatar
+          avatar: updatedData.avatar || agent.avatar,
+          pin: updatedData.pin !== undefined ? String(updatedData.pin).trim() : agent.pin
         };
       }
       return agent;
@@ -519,6 +543,117 @@ export const CrmProvider = ({ children }) => {
       title: 'Team Member Updated',
       message: `Profile details for ${newName || oldName} have been saved.`,
       type: 'success'
+    });
+  }, [addToast]);
+
+  // 9b. UPDATE AGENT PIN (Admin Setting)
+  const updateAgentPin = useCallback(async (agentId, newPin) => {
+    const pinStr = String(newPin).trim();
+    if (!pinStr) {
+      addToast({
+        title: 'PIN Required',
+        message: 'Please enter a valid PIN.',
+        type: 'warning'
+      });
+      return false;
+    }
+
+    let agentName = '';
+    setAgents(prev => prev.map(a => {
+      if (String(a.id) === String(agentId)) {
+        agentName = a.name;
+        return { ...a, pin: pinStr };
+      }
+      return a;
+    }));
+
+    // If currently logged in as this agent, update auth state
+    setAuth(prev => (prev?.id === agentId ? { ...prev, pin: pinStr } : prev));
+
+    try {
+      fetch(`/api/agents/${agentId}/pin`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pin: pinStr })
+      }).catch(() => {});
+    } catch {}
+
+    addToast({
+      title: 'PIN Assigned',
+      message: `New security PIN "${pinStr}" assigned to ${agentName}.`,
+      type: 'success'
+    });
+    return true;
+  }, [addToast]);
+
+  // 12. AUTHENTICATION (Admin Login, Agent PIN Login, Logout)
+  const loginAdmin = useCallback((credentials) => {
+    const email = credentials?.email?.trim() || 'admin@omniflow.io';
+    const adminUser = {
+      type: 'admin',
+      name: 'Ali Khan',
+      role: 'System Administrator',
+      email: email,
+      avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80'
+    };
+    setAuth(adminUser);
+    setActiveTab('dashboard');
+    addToast({
+      title: 'Admin Access Granted',
+      message: `Welcome, ${adminUser.name}. Full system access unlocked.`,
+      type: 'success'
+    });
+    return { success: true };
+  }, [addToast]);
+
+  const loginAgentPin = useCallback((agentId, enteredPin) => {
+    const targetAgent = agents.find(a => String(a.id) === String(agentId));
+    if (!targetAgent) {
+      addToast({
+        title: 'Member Not Found',
+        message: 'Please select a valid team member.',
+        type: 'warning'
+      });
+      return { success: false, message: 'Agent not found' };
+    }
+
+    const correctPin = String(targetAgent.pin || '1234').trim();
+    if (String(enteredPin).trim() !== correctPin) {
+      addToast({
+        title: 'Authentication Failed',
+        message: `Incorrect PIN for ${targetAgent.name}. Contact your Admin.`,
+        type: 'warning'
+      });
+      return { success: false, message: 'Invalid PIN' };
+    }
+
+    const agentUser = {
+      type: 'agent',
+      id: targetAgent.id,
+      name: targetAgent.name,
+      role: targetAgent.role,
+      email: targetAgent.email,
+      phone: targetAgent.phone,
+      avatar: targetAgent.avatar,
+      pin: correctPin
+    };
+
+    setAuth(agentUser);
+    setActiveTab('leads');
+    addToast({
+      title: 'Member Portal Unlocked',
+      message: `Welcome, ${targetAgent.name}! Viewing your assigned pipeline.`,
+      type: 'success'
+    });
+    return { success: true };
+  }, [agents, addToast]);
+
+  const logout = useCallback(() => {
+    setAuth(null);
+    addToast({
+      title: 'Signed Out',
+      message: 'You have been returned to the authentication portal.',
+      type: 'info'
     });
   }, [addToast]);
 
@@ -640,7 +775,12 @@ export const CrmProvider = ({ children }) => {
     deleteLead,
     addAgent,
     updateAgent,
+    updateAgentPin,
     removeAgent,
+    auth,
+    loginAdmin,
+    loginAgentPin,
+    logout,
     dbStatus,
     analytics,
     statusConfig: LEAD_STATUS_CONFIG

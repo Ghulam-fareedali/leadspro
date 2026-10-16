@@ -10,11 +10,14 @@ import {
   Layers, 
   Activity, 
   HelpCircle,
-  Database
+  Database,
+  LogOut,
+  KeyRound,
+  ShieldCheck
 } from 'lucide-react';
 
 export const Header = ({ onOpenUpload, searchQuery, setSearchQuery }) => {
-  const { analytics, customers, leads, activeTab, dbStatus } = useCrm();
+  const { analytics, customers, leads, activeTab, dbStatus, auth, logout } = useCrm();
   const [showNotifications, setShowNotifications] = useState(false);
   const notifRef = useRef(null);
 
@@ -78,21 +81,23 @@ export const Header = ({ onOpenUpload, searchQuery, setSearchQuery }) => {
           </span>
         </div>
 
-        {/* Bulk Upload Button (Prominent) */}
-        <button
-          onClick={onOpenUpload}
-          className="px-3.5 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-lg text-xs font-bold transition-all flex items-center gap-2 shadow-xs hover:border-blue-300"
-          title="Upload Excel or CSV data into Customers pool"
-        >
-          <Upload className="w-3.5 h-3.5 text-blue-600" />
-          <span className="hidden sm:inline">Upload Excel/CSV</span>
-        </button>
+        {/* Bulk Upload Button (Admin Only) */}
+        {auth?.type === 'admin' && (
+          <button
+            onClick={onOpenUpload}
+            className="px-3.5 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-lg text-xs font-bold transition-all flex items-center gap-2 shadow-xs hover:border-blue-300 cursor-pointer"
+            title="Upload Excel or CSV data into Customers pool"
+          >
+            <Upload className="w-3.5 h-3.5 text-blue-600" />
+            <span className="hidden sm:inline">Upload Excel/CSV</span>
+          </button>
+        )}
 
         {/* Notifications Popover */}
         <div className="relative" ref={notifRef}>
           <button
             onClick={() => setShowNotifications(!showNotifications)}
-            className="relative p-2 rounded-lg text-slate-500 hover:text-slate-800 hover:bg-slate-100 transition-colors focus:outline-none"
+            className="relative p-2 rounded-lg text-slate-500 hover:text-slate-800 hover:bg-slate-100 transition-colors focus:outline-none cursor-pointer"
             title="Recent Pipeline Activity"
           >
             <Bell className="w-5 h-5" />
@@ -136,15 +141,45 @@ export const Header = ({ onOpenUpload, searchQuery, setSearchQuery }) => {
         {/* Vertical Separator */}
         <div className="h-6 w-px bg-slate-200" />
 
-        {/* Admin User Chip */}
+        {/* User Profile Chip (Admin or Agent) */}
         <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-full bg-slate-800 text-white font-bold flex items-center justify-center text-xs shadow-xs">
-            AK
-          </div>
+          {auth?.avatar ? (
+            <img
+              src={auth.avatar}
+              alt={auth.name}
+              className="w-8 h-8 rounded-full object-cover ring-2 ring-blue-500/30"
+            />
+          ) : (
+            <div className="w-8 h-8 rounded-full bg-slate-800 text-white font-bold flex items-center justify-center text-xs shadow-xs">
+              {auth?.name?.substring(0, 2).toUpperCase() || 'AD'}
+            </div>
+          )}
+
           <div className="hidden lg:block text-left text-xs">
-            <p className="font-bold text-slate-800 leading-tight">Ali Khan</p>
-            <p className="text-[10px] text-slate-400 leading-tight">Admin & Lead Ops</p>
+            <div className="flex items-center gap-1.5">
+              <p className="font-bold text-slate-800 leading-tight">{auth?.name || 'User'}</p>
+              {auth?.type === 'admin' ? (
+                <span className="text-[9px] px-1.5 py-0.2 rounded bg-blue-100 text-blue-700 font-extrabold uppercase">
+                  Admin
+                </span>
+              ) : (
+                <span className="text-[9px] px-1.5 py-0.2 rounded bg-indigo-100 text-indigo-700 font-extrabold flex items-center gap-0.5" title={`Security PIN: ${auth?.pin}`}>
+                  <KeyRound className="w-2.5 h-2.5" />
+                  <span>PIN: {auth?.pin}</span>
+                </span>
+              )}
+            </div>
+            <p className="text-[10px] text-slate-400 leading-tight">{auth?.role || 'Team Member'}</p>
           </div>
+
+          {/* Logout / Switch Portal Button */}
+          <button
+            onClick={logout}
+            className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors ml-1 cursor-pointer"
+            title="Sign Out / Switch Portal"
+          >
+            <LogOut className="w-4 h-4" />
+          </button>
         </div>
       </div>
     </header>

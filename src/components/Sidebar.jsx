@@ -9,13 +9,19 @@ import {
   Sparkles, 
   ShieldCheck, 
   PhoneForwarded,
-  ArrowRightLeft
+  ArrowRightLeft,
+  KeyRound,
+  LogOut,
+  UserCheck
 } from 'lucide-react';
 
 export const Sidebar = () => {
-  const { activeTab, setActiveTab, analytics, agents } = useCrm();
+  const { activeTab, setActiveTab, analytics, agents, leads, auth, logout } = useCrm();
 
-  const navItems = [
+  const isAgent = auth?.type === 'agent';
+  const agentLeadsCount = leads.filter(l => l.assignedAgent === auth?.name).length;
+
+  const adminNavItems = [
     {
       id: 'dashboard',
       label: 'Dashboard',
@@ -41,13 +47,33 @@ export const Sidebar = () => {
     },
     {
       id: 'team',
-      label: 'Team',
+      label: 'Team & PINs',
       icon: Users2,
       badge: `${agents.length} Member${agents.length !== 1 ? 's' : ''}`,
       badgeColor: 'bg-emerald-100 text-emerald-700 font-bold',
-      description: 'Agent Roster & Performance'
+      description: 'Agent Roster & Security PINs'
     }
   ];
+
+  const agentNavItems = [
+    {
+      id: 'leads',
+      label: 'My Leads Pipeline',
+      icon: PhoneForwarded,
+      badge: `${agentLeadsCount} Assigned`,
+      badgeColor: 'bg-indigo-100 text-indigo-700 font-bold',
+      description: 'Your assigned customer leads'
+    },
+    {
+      id: 'dashboard',
+      label: 'My Performance',
+      icon: LayoutDashboard,
+      badge: null,
+      description: 'Your conversion & call stats'
+    }
+  ];
+
+  const navItems = isAgent ? agentNavItems : adminNavItems;
 
   return (
     <aside className="w-64 h-screen bg-white border-r border-slate-200 flex flex-col justify-between shrink-0 select-none z-20">
@@ -60,11 +86,19 @@ export const Sidebar = () => {
           <div>
             <div className="flex items-center gap-1.5">
               <span className="font-extrabold text-base tracking-tight text-slate-900">OmniFlow</span>
-              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 uppercase">
-                CRM
-              </span>
+              {isAgent ? (
+                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-700 uppercase">
+                  AGENT
+                </span>
+              ) : (
+                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 uppercase">
+                  ADMIN
+                </span>
+              )}
             </div>
-            <p className="text-[10px] text-slate-400 font-medium">Customer & Lead Pipeline</p>
+            <p className="text-[10px] text-slate-400 font-medium">
+              {isAgent ? `${auth?.name} Portal` : 'Customer & Lead Pipeline'}
+            </p>
           </div>
         </div>
 
@@ -170,6 +204,15 @@ export const Sidebar = () => {
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" /> Live Sync
           </span>
         </div>
+
+        {/* Sign Out Button */}
+        <button
+          onClick={logout}
+          className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-xl border border-slate-200 hover:border-rose-300 hover:bg-rose-50 text-slate-600 hover:text-rose-600 text-xs font-semibold transition-all cursor-pointer"
+        >
+          <LogOut className="w-3.5 h-3.5" />
+          <span>Exit / Switch Portal</span>
+        </button>
       </div>
     </aside>
   );

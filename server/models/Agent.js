@@ -30,6 +30,11 @@ const agentSchema = new mongoose.Schema({
   color: {
     type: String,
     default: 'blue'
+  },
+  pin: {
+    type: String,
+    default: '1234',
+    trim: true
   }
 }, {
   timestamps: true

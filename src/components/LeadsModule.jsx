@@ -31,14 +31,21 @@ export const LeadsModule = ({ searchQuery, setSearchQuery }) => {
     analytics, 
     setActiveTab, 
     statusConfig,
+    auth,
     addToast
   } = useCrm();
 
+  const isAgent = auth?.type === 'agent';
   const [activeStatusTab, setActiveStatusTab] = useState('ALL');
   const [agentFilter, setAgentFilter] = useState('ALL');
 
+  // Leads scoped to this user
+  const scopedLeads = useMemo(() => {
+    return isAgent ? leads.filter(l => l.assignedAgent === auth?.name) : leads;
+  }, [leads, isAgent, auth]);
+
   const filteredLeads = useMemo(() => {
-    return leads.filter(lead => {
+    return scopedLeads.filter(lead => {
       const matchesSearch = !searchQuery ||
         lead.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
         lead.phone.includes(searchQuery) ||
@@ -50,44 +57,44 @@ export const LeadsModule = ({ searchQuery, setSearchQuery }) => {
 
       if (activeStatusTab !== 'ALL' && lead.status !== activeStatusTab) return false;
 
-      if (agentFilter !== 'ALL' && lead.assignedAgent !== agentFilter) return false;
+      if (!isAgent && agentFilter !== 'ALL' && lead.assignedAgent !== agentFilter) return false;
 
       return true;
     });
-  }, [leads, searchQuery, activeStatusTab, agentFilter]);
+  }, [scopedLeads, searchQuery, activeStatusTab, agentFilter, isAgent]);
 
   const statusTabs = [
     {
       id: 'ALL',
-      label: 'All Assigned Leads',
-      count: leads.length,
+      label: isAgent ? 'My Assigned Leads' : 'All Assigned Leads',
+      count: scopedLeads.length,
       badgeClass: 'bg-slate-200 text-slate-700'
     },
     {
       id: 'Pending',
       label: 'Pending',
-      count: analytics.pendingCount,
+      count: scopedLeads.filter(l => l.status === 'Pending').length,
       badgeClass: 'bg-amber-100 text-amber-800 font-bold',
       desc: 'Awaiting outreach'
     },
     {
       id: 'Connected',
       label: 'Connected',
-      count: analytics.connectedCount,
+      count: scopedLeads.filter(l => l.status === 'Connected').length,
       badgeClass: 'bg-blue-100 text-blue-800 font-bold',
       desc: 'In discussions'
     },
     {
       id: 'Interested',
       label: 'Interested (Hot)',
-      count: analytics.interestedCount,
+      count: scopedLeads.filter(l => l.status === 'Interested').length,
       badgeClass: 'bg-emerald-100 text-emerald-800 font-bold',
       desc: 'Ready to convert'
     },
     {
       id: 'Not Interested',
       label: 'Not Interested',
-      count: analytics.notInterestedCount,
+      count: scopedLeads.filter(l => l.status === 'Not Interested').length,
       badgeClass: 'bg-rose-100 text-rose-800 font-bold',
       desc: 'Dead leads'
     }
@@ -193,24 +200,26 @@ export const LeadsModule = ({ searchQuery, setSearchQuery }) => {
             })}
           </div>
 
-          <div className="flex items-center gap-2 text-xs">
-            <span className="text-slate-500 font-semibold shrink-0">Filter Agent:</span>
-            <select
-              value={agentFilter}
-              onChange={(e) => setAgentFilter(e.target.value)}
-              className="px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-medium text-slate-700 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-            >
-              <option value="ALL">All Agents ({leads.length})</option>
-              {agents.map((agent) => {
-                const count = leads.filter(l => l.assignedAgent === agent.name).length;
-                return (
-                  <option key={agent.id} value={agent.name}>
-                    {agent.name} ({count})
-                  </option>
-                );
-              })}
-            </select>
-          </div>
+          {!isAgent && (
+            <div className="flex items-center gap-2 text-xs">
+              <span className="text-slate-500 font-semibold shrink-0">Filter Agent:</span>
+              <select
+                value={agentFilter}
+                onChange={(e) => setAgentFilter(e.target.value)}
+                className="px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-medium text-slate-700 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 cursor-pointer"
+              >
+                <option value="ALL">All Agents ({leads.length})</option>
+                {agents.map((agent) => {
+                  const count = leads.filter(l => l.assignedAgent === agent.name).length;
+                  return (
+                    <option key={agent.id} value={agent.name}>
+                      {agent.name} ({count})
+                    </option>
+                  );
+                })}
+              </select>
+            </div>
+          )}
         </div>
       </div>
 
@@ -334,13 +343,15 @@ export const LeadsModule = ({ searchQuery, setSearchQuery }) => {
                           <StatusBadge status={lead.status} size="sm" />
                         )}
 
-                        <button
-                          onClick={() => deleteLead(lead.id)}
-                          className="p-1 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
-                          title="Remove lead from pipeline"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
+                        {!isAgent && (
+                          <button
+                            onClick={() => deleteLead(lead.id)}
+                            className="p-1 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
+                            title="Remove lead from pipeline"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>

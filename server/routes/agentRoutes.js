@@ -29,7 +29,7 @@ router.get('/', async (req, res) => {
 // POST create new agent
 router.post('/', async (req, res) => {
   try {
-    const { name, role, email, phone, avatar, color } = req.body;
+    const { name, role, email, phone, avatar, color, pin } = req.body;
     if (!name || !name.trim()) {
       return res.status(400).json({ success: false, error: 'Name is required' });
     }
@@ -44,7 +44,8 @@ router.post('/', async (req, res) => {
       email: email || '',
       phone: phone || '0300-1234567',
       avatar: avatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&auto=format&fit=crop&q=80',
-      color: color || 'blue'
+      color: color || 'blue',
+      pin: pin ? String(pin).trim() : '1234'
     });
 
     res.status(201).json({ success: true, data: newAgent });
@@ -53,11 +54,34 @@ router.post('/', async (req, res) => {
   }
 });
 
+// PUT update agent PIN directly
+router.put('/:id/pin', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { pin } = req.body;
+    if (!pin || !String(pin).trim()) {
+      return res.status(400).json({ success: false, error: 'PIN is required' });
+    }
+
+    const existing = await Agent.findOne({ id: Number(id) });
+    if (!existing) {
+      return res.status(404).json({ success: false, error: 'Agent not found' });
+    }
+
+    existing.pin = String(pin).trim();
+    await existing.save();
+
+    res.json({ success: true, message: `PIN updated successfully for ${existing.name}`, data: existing });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // PUT update agent (and sync customer / lead references)
 router.put('/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, role, email, phone, avatar } = req.body;
+    const { name, role, email, phone, avatar, pin } = req.body;
 
     const existing = await Agent.findOne({ id: Number(id) });
     if (!existing) {
@@ -72,6 +96,7 @@ router.put('/:id', async (req, res) => {
     if (email) existing.email = email;
     if (phone) existing.phone = phone;
     if (avatar) existing.avatar = avatar;
+    if (pin !== undefined) existing.pin = String(pin).trim();
 
     await existing.save();
 

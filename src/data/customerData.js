@@ -5,7 +5,8 @@ export const INITIAL_AGENTS = [
     email: "bilal.ahmed@omniflow.io",
     role: "Senior Sales Rep",
     avatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80",
-    color: "blue"
+    color: "blue",
+    pin: "1234"
   },
   {
     id: 2,
@@ -13,7 +14,8 @@ export const INITIAL_AGENTS = [
     email: "sara.malik@omniflow.io",
     role: "Outbound Specialist",
     avatar: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150&auto=format&fit=crop&q=80",
-    color: "purple"
+    color: "purple",
+    pin: "2345"
   },
   {
     id: 3,
@@ -21,7 +23,8 @@ export const INITIAL_AGENTS = [
     email: "ali.khan@omniflow.io",
     role: "Lead Dispatcher / Admin",
     avatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80",
-    color: "emerald"
+    color: "emerald",
+    pin: "9999"
   },
   {
     id: 4,
@@ -29,7 +32,8 @@ export const INITIAL_AGENTS = [
     email: "usman.ghani@omniflow.io",
     role: "Enterprise Closer",
     avatar: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150&auto=format&fit=crop&q=80",
-    color: "amber"
+    color: "amber",
+    pin: "3456"
   }
 ];
 

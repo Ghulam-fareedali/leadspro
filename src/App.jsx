@@ -8,11 +8,22 @@ import { DashboardModule } from './components/DashboardModule';
 import { TeamModule } from './components/TeamModule';
 import { BulkUploadModal } from './components/BulkUploadModal';
 import { ToastContainer } from './components/ToastContainer';
+import { LoginScreen } from './components/LoginScreen';
 
 const MainLayout = () => {
-  const { activeTab, setActiveTab } = useCrm();
+  const { activeTab, setActiveTab, auth } = useCrm();
   const [isUploadOpen, setIsUploadOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+
+  // If not logged in, render Login Portal
+  if (!auth) {
+    return (
+      <>
+        <LoginScreen />
+        <ToastContainer />
+      </>
+    );
+  }
 
   const handleOpenUpload = () => setIsUploadOpen(true);
   const handleCloseUpload = () => setIsUploadOpen(false);
@@ -43,12 +54,20 @@ const MainLayout = () => {
               <DashboardModule onOpenUpload={handleOpenUpload} />
             )}
 
+            {/* Customers Module only for Admin */}
             {activeTab === 'customers' && (
-              <CustomersModule 
-                onOpenUpload={handleOpenUpload}
-                searchQuery={searchQuery}
-                setSearchQuery={setSearchQuery}
-              />
+              auth.type === 'admin' ? (
+                <CustomersModule 
+                  onOpenUpload={handleOpenUpload}
+                  searchQuery={searchQuery}
+                  setSearchQuery={setSearchQuery}
+                />
+              ) : (
+                <LeadsModule 
+                  searchQuery={searchQuery}
+                  setSearchQuery={setSearchQuery}
+                />
+              )
             )}
 
             {activeTab === 'leads' && (
@@ -58,19 +77,29 @@ const MainLayout = () => {
               />
             )}
 
+            {/* Team Module only for Admin */}
             {activeTab === 'team' && (
-              <TeamModule />
+              auth.type === 'admin' ? (
+                <TeamModule />
+              ) : (
+                <LeadsModule 
+                  searchQuery={searchQuery}
+                  setSearchQuery={setSearchQuery}
+                />
+              )
             )}
           </div>
         </main>
       </div>
 
-      {/* Bulk Upload Modal */}
-      <BulkUploadModal
-        isOpen={isUploadOpen}
-        onClose={handleCloseUpload}
-        onFinishGoToCustomers={handleUploadFinishGoToCustomers}
-      />
+      {/* Bulk Upload Modal (Admin only) */}
+      {auth.type === 'admin' && (
+        <BulkUploadModal
+          isOpen={isUploadOpen}
+          onClose={handleCloseUpload}
+          onFinishGoToCustomers={handleUploadFinishGoToCustomers}
+        />
+      )}
 
       {/* Toast Alerts */}
       <ToastContainer />
