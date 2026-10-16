@@ -1,29 +1,5 @@
-export const INITIAL_USERS = [
-  { 
-    id: 1, 
-    name: "Ali", 
-    role: "Admin", 
-    email: "ali.khan@leadflow.io", 
-    avatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80",
-    title: "Head of Sales"
-  },
-  { 
-    id: 2, 
-    name: "Bilal", 
-    role: "Agent", 
-    email: "bilal.ahmed@leadflow.io", 
-    avatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80",
-    title: "Senior Sales Representative"
-  },
-  { 
-    id: 3, 
-    name: "Sara", 
-    role: "Agent", 
-    email: "sara.malik@leadflow.io", 
-    avatar: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150&auto=format&fit=crop&q=80",
-    title: "Outbound Call Specialist"
-  }
-];
+export const INITIAL_USERS = [];
+
 
 export const STATUS_CONFIG = {
   Pending: {

@@ -45,9 +45,9 @@ export const TeamModule = () => {
       name: '',
       role: 'Sales Representative',
       email: '',
-      phone: '0300-1234567',
+      phone: '',
       avatar: '',
-      pin: '1234'
+      pin: ''
     }
   });
 
@@ -77,9 +77,9 @@ export const TeamModule = () => {
         name: '',
         role: 'Sales Representative',
         email: '',
-        phone: '0300-1234567',
+        phone: '',
         avatar: '',
-        pin: '1234'
+        pin: ''
       }
     });
   };
@@ -442,12 +442,12 @@ export const TeamModule = () => {
                       ...agentModal,
                       formData: { ...agentModal.formData, pin: e.target.value.replace(/\D/g, '') }
                     })}
-                    placeholder="1234"
+                    placeholder="e.g. 5566"
                     className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 font-mono font-bold tracking-wider focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 transition-all"
                   />
                 </div>
                 <p className="text-[10px] text-slate-400 mt-0.5">
-                  The team member will enter this PIN on the login screen to access their leads.
+                  The team member will enter this assigned PIN on the login screen to access their leads.
                 </p>
               </div>
 
@@ -597,12 +597,12 @@ export const TeamModule = () => {
                   maxLength={6}
                   value={pinModal.newPin}
                   onChange={(e) => setPinModal({ ...pinModal, newPin: e.target.value.replace(/\D/g, '') })}
-                  placeholder="1234"
+                  placeholder="e.g. 5566"
                   className="w-full py-2.5 px-3 text-center font-mono text-xl font-bold tracking-widest bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600"
                   autoFocus
                 />
                 <p className="text-[11px] text-slate-400 text-center">
-                  This agent will use this PIN to log in to their personal portal.
+                  This team member will use this assigned PIN to log in to their personal portal.
                 </p>
               </div>
 

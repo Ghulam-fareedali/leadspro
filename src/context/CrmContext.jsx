@@ -6,14 +6,16 @@ import {
   LEAD_STATUS_CONFIG 
 } from '../data/customerData';
 
-// Clean test data version marker - ensures any cached dummy records from previous tests are cleared
-const DATA_STORAGE_VERSION = 'v2_clean_zero_data';
+// Clean test data version marker - ensures any cached dummy records and mock agents are purged
+const DATA_STORAGE_VERSION = 'v3_production_realtime';
 if (typeof window !== 'undefined') {
   try {
     const cachedVer = localStorage.getItem('leadspro_storage_version');
     if (cachedVer !== DATA_STORAGE_VERSION) {
       localStorage.removeItem('leadspro_customers');
       localStorage.removeItem('leadspro_leads');
+      localStorage.removeItem('leadspro_agents');
+      localStorage.removeItem('leadspro_auth');
       localStorage.setItem('leadspro_storage_version', DATA_STORAGE_VERSION);
     }
   } catch (e) {
@@ -24,16 +26,22 @@ if (typeof window !== 'undefined') {
 const CrmContext = createContext(null);
 
 export const CrmProvider = ({ children }) => {
-  // Load cached state or fallback to initial data
+  // Configured Admin Profile (Name, Email, Password) - stored in localStorage for real-time usage
+  const [adminProfile, setAdminProfile] = useState(() => {
+    try {
+      const cached = localStorage.getItem('leadspro_admin_profile');
+      return cached ? JSON.parse(cached) : null;
+    } catch {
+      return null;
+    }
+  });
+
+  // Load cached team agents or fallback to INITIAL_AGENTS (empty array for clean production)
   const [agents, setAgents] = useState(() => {
     try {
       const cached = localStorage.getItem('leadspro_agents');
       if (cached) {
-        const parsed = JSON.parse(cached);
-        return parsed.map((a, idx) => ({
-          ...a,
-          pin: a.pin || INITIAL_AGENTS[idx]?.pin || "1234"
-        }));
+        return JSON.parse(cached);
       }
       return INITIAL_AGENTS;
     } catch {
@@ -494,11 +502,11 @@ export const CrmProvider = ({ children }) => {
       id: nextId,
       name: nameTrimmed,
       role: agentData.role?.trim() || "Sales Representative",
-      email: agentData.email?.trim() || `${nameTrimmed.toLowerCase().replace(/[^a-z0-9]/g, '')}@omniflow.io`,
-      phone: agentData.phone?.trim() || "0300-1234567",
+      email: agentData.email?.trim() || "",
+      phone: agentData.phone?.trim() || "",
       avatar: pickedAvatar,
       color: "blue",
-      pin: agentData.pin?.trim() || "1234"
+      pin: agentData.pin?.trim() || String(Math.floor(1000 + Math.random() * 9000))
     };
 
     setAgents(prev => [...prev, newAgent]);
@@ -601,24 +609,99 @@ export const CrmProvider = ({ children }) => {
     return true;
   }, [addToast]);
 
-  // 12. AUTHENTICATION (Admin Login, Agent PIN Login, Logout)
+  // 12. AUTHENTICATION (Dynamic Admin Login & Registration, Agent PIN Login, Logout)
   const loginAdmin = useCallback((credentials) => {
-    const email = credentials?.email?.trim() || 'admin@omniflow.io';
+    const enteredEmail = credentials?.email?.trim() || '';
+    const enteredPassword = credentials?.password || '';
+    const enteredName = credentials?.name?.trim();
+
+    // Check if an admin profile already exists
+    let savedProfile = adminProfile;
+    if (!savedProfile) {
+      try {
+        const c = localStorage.getItem('leadspro_admin_profile');
+        if (c) savedProfile = JSON.parse(c);
+      } catch {}
+    }
+
+    if (savedProfile) {
+      // Validate credentials if profile is registered
+      if (enteredEmail && savedProfile.email && enteredEmail.toLowerCase() !== savedProfile.email.toLowerCase()) {
+        const msg = 'Email does not match registered Administrator account.';
+        addToast({ title: 'Authentication Failed', message: msg, type: 'warning' });
+        return { success: false, message: msg };
+      }
+      if (enteredPassword && savedProfile.password && enteredPassword !== savedProfile.password) {
+        const msg = 'Incorrect Administrator password.';
+        addToast({ title: 'Authentication Failed', message: msg, type: 'warning' });
+        return { success: false, message: msg };
+      }
+    }
+
+    const finalName = enteredName || savedProfile?.name || 'Administrator';
+    const finalEmail = enteredEmail || savedProfile?.email || 'admin@company.com';
+
+    // If new name or first setup, persist profile
+    if (!savedProfile || enteredName) {
+      const newProf = {
+        name: finalName,
+        email: finalEmail,
+        password: enteredPassword || savedProfile?.password || 'admin123',
+        updatedAt: new Date().toISOString()
+      };
+      setAdminProfile(newProf);
+      try {
+        localStorage.setItem('leadspro_admin_profile', JSON.stringify(newProf));
+      } catch {}
+    }
+
     const adminUser = {
       type: 'admin',
-      name: 'Ali Khan',
+      name: finalName,
       role: 'System Administrator',
-      email: email,
+      email: finalEmail,
       avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80'
     };
+
     setAuth(adminUser);
     setActiveTab('dashboard');
     addToast({
       title: 'Admin Access Granted',
-      message: `Welcome, ${adminUser.name}. Full system access unlocked.`,
+      message: `Welcome, ${finalName}! Full system access unlocked.`,
       type: 'success'
     });
     return { success: true };
+  }, [adminProfile, addToast]);
+
+  const updateAdminProfile = useCallback((updates) => {
+    setAdminProfile(prev => {
+      const updated = { ...prev, ...updates };
+      try {
+        localStorage.setItem('leadspro_admin_profile', JSON.stringify(updated));
+      } catch {}
+      return updated;
+    });
+
+    setAuth(prev => {
+      if (prev?.type === 'admin') {
+        const nextAuth = {
+          ...prev,
+          name: updates.name || prev.name,
+          email: updates.email || prev.email
+        };
+        try {
+          localStorage.setItem('leadspro_auth', JSON.stringify(nextAuth));
+        } catch {}
+        return nextAuth;
+      }
+      return prev;
+    });
+
+    addToast({
+      title: 'Admin Profile Updated',
+      message: 'Your administrator profile details have been saved.',
+      type: 'success'
+    });
   }, [addToast]);
 
   const loginAgentPin = useCallback((agentId, enteredPin) => {
@@ -632,14 +715,25 @@ export const CrmProvider = ({ children }) => {
       return { success: false, message: 'Agent not found' };
     }
 
-    const correctPin = String(targetAgent.pin || '1234').trim();
-    if (String(enteredPin).trim() !== correctPin) {
+    const assignedPin = String(targetAgent.pin || '').trim();
+    if (!assignedPin) {
+      const msg = `No PIN has been assigned to ${targetAgent.name} yet. Please ask your Administrator to assign you a PIN.`;
       addToast({
-        title: 'Authentication Failed',
-        message: `Incorrect PIN for ${targetAgent.name}. Contact your Admin.`,
+        title: 'PIN Not Assigned',
+        message: msg,
         type: 'warning'
       });
-      return { success: false, message: 'Invalid PIN' };
+      return { success: false, message: msg };
+    }
+
+    if (String(enteredPin).trim() !== assignedPin) {
+      const msg = `Incorrect PIN for ${targetAgent.name}. Please enter the exact security PIN assigned by your Administrator.`;
+      addToast({
+        title: 'Authentication Failed',
+        message: msg,
+        type: 'warning'
+      });
+      return { success: false, message: msg };
     }
 
     const agentUser = {
@@ -650,7 +744,7 @@ export const CrmProvider = ({ children }) => {
       email: targetAgent.email,
       phone: targetAgent.phone,
       avatar: targetAgent.avatar,
-      pin: correctPin
+      pin: assignedPin
     };
 
     setAuth(agentUser);
@@ -793,6 +887,8 @@ export const CrmProvider = ({ children }) => {
     updateAgentPin,
     removeAgent,
     auth,
+    adminProfile,
+    updateAdminProfile,
     loginAdmin,
     loginAgentPin,
     logout,

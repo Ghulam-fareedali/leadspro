@@ -13,13 +13,32 @@ import {
   Database,
   LogOut,
   KeyRound,
-  ShieldCheck
+  ShieldCheck,
+  Pencil,
+  X
 } from 'lucide-react';
 
 export const Header = ({ onOpenUpload, searchQuery, setSearchQuery }) => {
-  const { analytics, customers, leads, activeTab, dbStatus, auth, logout } = useCrm();
+  const { analytics, customers, leads, activeTab, dbStatus, auth, logout, adminProfile, updateAdminProfile } = useCrm();
   const [showNotifications, setShowNotifications] = useState(false);
   const notifRef = useRef(null);
+
+  // Admin Profile Edit Modal State
+  const [showAdminModal, setShowAdminModal] = useState(false);
+  const [editName, setEditName] = useState('');
+  const [editEmail, setEditEmail] = useState('');
+  const [editPassword, setEditPassword] = useState('');
+
+  const handleSaveAdminProfile = (e) => {
+    e.preventDefault();
+    if (!editName.trim()) return;
+    updateAdminProfile({
+      name: editName.trim(),
+      email: editEmail.trim(),
+      password: editPassword.trim()
+    });
+    setShowAdminModal(false);
+  };
 
   // Close notifications popover on click outside
   useEffect(() => {
@@ -142,46 +161,145 @@ export const Header = ({ onOpenUpload, searchQuery, setSearchQuery }) => {
         <div className="h-6 w-px bg-slate-200" />
 
         {/* User Profile Chip (Admin or Agent) */}
-        <div className="flex items-center gap-2.5">
-          {auth?.avatar ? (
-            <img
-              src={auth.avatar}
-              alt={auth.name}
-              className="w-8 h-8 rounded-full object-cover ring-2 ring-blue-500/30"
-            />
-          ) : (
-            <div className="w-8 h-8 rounded-full bg-slate-800 text-white font-bold flex items-center justify-center text-xs shadow-xs">
-              {auth?.name?.substring(0, 2).toUpperCase() || 'AD'}
-            </div>
-          )}
+        <div className="flex items-center gap-2">
+          <div 
+            onClick={() => {
+              if (auth?.type === 'admin') {
+                setEditName(auth.name || '');
+                setEditEmail(auth.email || '');
+                setEditPassword(adminProfile?.password || '');
+                setShowAdminModal(true);
+              }
+            }}
+            className={`flex items-center gap-2.5 p-1 rounded-xl transition-all ${
+              auth?.type === 'admin' 
+                ? 'hover:bg-slate-100 cursor-pointer' 
+                : ''
+            }`}
+            title={auth?.type === 'admin' ? "Click to Edit Admin Profile & Name" : undefined}
+          >
+            {auth?.avatar ? (
+              <img
+                src={auth.avatar}
+                alt={auth.name}
+                className="w-8 h-8 rounded-full object-cover ring-2 ring-blue-500/30"
+              />
+            ) : (
+              <div className="w-8 h-8 rounded-full bg-slate-800 text-white font-bold flex items-center justify-center text-xs shadow-xs">
+                {auth?.name?.substring(0, 2).toUpperCase() || 'AD'}
+              </div>
+            )}
 
-          <div className="hidden lg:block text-left text-xs">
-            <div className="flex items-center gap-1.5">
-              <p className="font-bold text-slate-800 leading-tight">{auth?.name || 'User'}</p>
-              {auth?.type === 'admin' ? (
-                <span className="text-[9px] px-1.5 py-0.2 rounded bg-blue-100 text-blue-700 font-extrabold uppercase">
-                  Admin
-                </span>
-              ) : (
-                <span className="text-[9px] px-1.5 py-0.2 rounded bg-indigo-100 text-indigo-700 font-extrabold flex items-center gap-0.5" title={`Security PIN: ${auth?.pin}`}>
-                  <KeyRound className="w-2.5 h-2.5" />
-                  <span>PIN: {auth?.pin}</span>
-                </span>
-              )}
+            <div className="hidden lg:block text-left text-xs">
+              <div className="flex items-center gap-1.5">
+                <p className="font-bold text-slate-800 leading-tight">{auth?.name || 'User'}</p>
+                {auth?.type === 'admin' ? (
+                  <span className="text-[9px] px-1.5 py-0.2 rounded bg-blue-100 text-blue-700 font-extrabold uppercase flex items-center gap-0.5">
+                    <span>Admin</span>
+                    <Pencil className="w-2 h-2 opacity-60" />
+                  </span>
+                ) : (
+                  <span className="text-[9px] px-1.5 py-0.2 rounded bg-indigo-100 text-indigo-700 font-extrabold flex items-center gap-0.5" title={`Security PIN: ${auth?.pin}`}>
+                    <KeyRound className="w-2.5 h-2.5" />
+                    <span>PIN: {auth?.pin}</span>
+                  </span>
+                )}
+              </div>
+              <p className="text-[10px] text-slate-400 leading-tight">{auth?.role || 'Team Member'}</p>
             </div>
-            <p className="text-[10px] text-slate-400 leading-tight">{auth?.role || 'Team Member'}</p>
           </div>
 
           {/* Logout / Switch Portal Button */}
           <button
             onClick={logout}
-            className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors ml-1 cursor-pointer"
+            className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
             title="Sign Out / Switch Portal"
           >
             <LogOut className="w-4 h-4" />
           </button>
         </div>
       </div>
+
+      {/* Admin Profile Settings Modal */}
+      {showAdminModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs animate-in fade-in duration-150">
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-150">
+            <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/80">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-lg bg-blue-100 text-blue-600 flex items-center justify-center font-bold">
+                  <ShieldCheck className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-slate-800">Admin Profile Settings</h3>
+                  <p className="text-[11px] text-slate-400">Update your Administrator display name and credentials</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowAdminModal(false)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-200/60 transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveAdminProfile} className="p-6 space-y-4 text-xs">
+              <div className="space-y-1">
+                <label className="block font-semibold text-slate-700">Administrator Full Name</label>
+                <input
+                  type="text"
+                  required
+                  value={editName}
+                  onChange={(e) => setEditName(e.target.value)}
+                  placeholder="e.g. Ghulam Fareed"
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 font-semibold focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 transition-all"
+                />
+                <p className="text-[10px] text-slate-400">This name will appear on the header and throughout the CRM.</p>
+              </div>
+
+              <div className="space-y-1">
+                <label className="block font-semibold text-slate-700">Admin Email Address</label>
+                <input
+                  type="email"
+                  required
+                  value={editEmail}
+                  onChange={(e) => setEditEmail(e.target.value)}
+                  placeholder="admin@yourcompany.com"
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 transition-all"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="block font-semibold text-slate-700">Admin Login Password</label>
+                <input
+                  type="password"
+                  required
+                  value={editPassword}
+                  onChange={(e) => setEditPassword(e.target.value)}
+                  placeholder="Enter new password"
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 transition-all"
+                />
+              </div>
+
+              <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => setShowAdminModal(false)}
+                  className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white shadow-sm shadow-blue-500/25 transition-all cursor-pointer flex items-center gap-1.5"
+                >
+                  <Check className="w-4 h-4" />
+                  <span>Save Profile</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </header>
   );
 };
