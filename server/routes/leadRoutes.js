@@ -1,30 +1,32 @@
 import express from 'express';
 import { Lead } from '../models/Lead.js';
+import { getCloudData, saveCloudData } from '../config/cloudStorage.js';
 
 const router = express.Router();
 
-// Fallback guard if MONGODB_URI is not yet configured
-router.use((req, res, next) => {
-  if (!process.env.MONGODB_URI) {
-    if (req.method === 'GET') {
-      return res.json({ success: true, count: 0, data: [], note: 'MONGODB_URI not configured' });
-    }
-    return res.json({ success: true, message: 'Local mode active', data: req.body });
-  }
-  next();
-});
+const isMongoActive = () => Boolean(process.env.MONGODB_URI);
 
 // GET all leads
 router.get('/', async (req, res) => {
   try {
-    const leads = await Lead.find().sort({ createdAt: -1 });
-    res.json({ success: true, count: leads.length, data: leads });
+    if (isMongoActive()) {
+      const leads = await Lead.find().sort({ createdAt: -1 });
+      return res.json({ success: true, count: leads.length, data: leads, source: 'mongodb' });
+    }
+
+    const cloudData = await getCloudData();
+    res.json({
+      success: true,
+      count: cloudData.leads.length,
+      data: cloudData.leads,
+      source: 'cloud_sync'
+    });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
 });
 
-// PUT update status
+// PUT update lead status
 router.put('/:id/status', async (req, res) => {
   try {
     const { id } = req.params;
@@ -38,23 +40,43 @@ router.put('/:id/status', async (req, res) => {
     const now = new Date();
     const timestamp = `${now.toISOString().split('T')[0]} ${now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
 
-    const updateFields = {
-      status,
-      ...(status !== 'Pending' ? { lastContactDate: timestamp } : {}),
-      ...(notes ? { notes } : {})
-    };
+    if (isMongoActive()) {
+      const updateFields = {
+        status,
+        ...(status !== 'Pending' ? { lastContactDate: timestamp } : {}),
+        ...(notes ? { notes } : {})
+      };
 
-    const updated = await Lead.findOneAndUpdate(
-      { id },
-      { $set: updateFields },
-      { new: true }
-    );
+      const updated = await Lead.findOneAndUpdate(
+        { id },
+        { $set: updateFields },
+        { new: true }
+      );
 
-    if (!updated) {
-      return res.status(404).json({ success: false, error: 'Lead not found' });
+      if (!updated) return res.status(404).json({ success: false, error: 'Lead not found' });
+      return res.json({ success: true, data: updated });
     }
 
-    res.json({ success: true, data: updated });
+    const cloudData = await getCloudData();
+    let found = false;
+
+    cloudData.leads = cloudData.leads.map(lead => {
+      if (lead.id === id) {
+        found = true;
+        return {
+          ...lead,
+          status,
+          ...(status !== 'Pending' ? { lastContactDate: timestamp } : {}),
+          ...(notes ? { notes } : {})
+        };
+      }
+      return lead;
+    });
+
+    if (!found) return res.status(404).json({ success: false, error: 'Lead not found' });
+
+    await saveCloudData(cloudData);
+    res.json({ success: true, message: 'Status updated' });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
@@ -64,8 +86,17 @@ router.put('/:id/status', async (req, res) => {
 router.delete('/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    await Lead.deleteOne({ id });
-    res.json({ success: true, message: `Lead ${id} removed` });
+
+    if (isMongoActive()) {
+      await Lead.findOneAndDelete({ id });
+      return res.json({ success: true, message: 'Lead deleted' });
+    }
+
+    const cloudData = await getCloudData();
+    cloudData.leads = cloudData.leads.filter(l => l.id !== id);
+    await saveCloudData(cloudData);
+
+    res.json({ success: true, message: 'Lead deleted' });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }

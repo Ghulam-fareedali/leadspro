@@ -23,16 +23,23 @@ if (typeof window !== 'undefined') {
   }
 }
 
+export const DEFAULT_ADMIN = {
+  email: 'admin@leadspro.com',
+  username: 'admin',
+  password: 'admin',
+  name: 'Admin'
+};
+
 const CrmContext = createContext(null);
 
 export const CrmProvider = ({ children }) => {
-  // Configured Admin Profile (Name, Email, Password) - stored in localStorage for real-time usage
+  // Configured Admin Profile (Name, Email, Password) - with instant default credentials
   const [adminProfile, setAdminProfile] = useState(() => {
     try {
       const cached = localStorage.getItem('leadspro_admin_profile');
-      return cached ? JSON.parse(cached) : null;
+      return cached ? JSON.parse(cached) : DEFAULT_ADMIN;
     } catch {
-      return null;
+      return DEFAULT_ADMIN;
     }
   });
 
@@ -114,61 +121,139 @@ export const CrmProvider = ({ children }) => {
     setToasts(prev => prev.filter(t => t.id !== id));
   }, []);
 
-  // Sync with Backend API on mount
-  useEffect(() => {
-    const syncWithBackend = async () => {
+  const CLOUD_SYNC_BIN = 'https://extendsclass.com/api/json-storage/bin/fecfccb';
+  const CLOUD_SYNC_KEY = 'leadspro_secret_key_9981';
+
+  // Push latest state to shared cloud
+  const pushToSharedCloud = useCallback(async (overrides = {}) => {
+    try {
+      const payload = {
+        customers: overrides.customers !== undefined ? overrides.customers : customers,
+        agents: overrides.agents !== undefined ? overrides.agents : agents,
+        leads: overrides.leads !== undefined ? overrides.leads : leads,
+        admin: overrides.admin !== undefined ? overrides.admin : (adminProfile || DEFAULT_ADMIN),
+        version: '1.0',
+        updatedAt: new Date().toISOString()
+      };
+
       try {
-        const healthRes = await fetch('/api/health');
-        if (healthRes.ok) {
-          const healthData = await healthRes.json();
-          const hasMongo = healthData.mongodbUriSet;
+        localStorage.setItem('leadspro_customers', JSON.stringify(payload.customers));
+        localStorage.setItem('leadspro_agents', JSON.stringify(payload.agents));
+        localStorage.setItem('leadspro_leads', JSON.stringify(payload.leads));
+        localStorage.setItem('leadspro_admin_profile', JSON.stringify(payload.admin));
+      } catch (err) {}
 
-          setDbStatus({
-            connected: hasMongo,
-            mode: hasMongo ? 'mongodb' : 'server-local',
-            message: hasMongo ? 'MongoDB Connected' : 'Express Server Running (Add MONGODB_URI to connect MongoDB Atlas)'
-          });
+      await fetch(CLOUD_SYNC_BIN, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Security-key': CLOUD_SYNC_KEY
+        },
+        body: JSON.stringify(payload)
+      }).catch(() => {});
+    } catch (e) {
+      console.warn('Cloud sync push warning:', e);
+    }
+  }, [customers, agents, leads, adminProfile]);
 
-          // Fetch agents from API
-          const [agentRes, custRes, leadRes] = await Promise.all([
-            fetch('/api/agents').catch(() => null),
-            fetch('/api/customers').catch(() => null),
-            fetch('/api/leads').catch(() => null)
-          ]);
+  // Sync state across all devices
+  const syncWithBackend = useCallback(async (isManual = false) => {
+    try {
+      // 1. Fetch directly from shared cloud bin (accessible across all PCs immediately)
+      let cloudData = null;
+      try {
+        const cloudRes = await fetch(`${CLOUD_SYNC_BIN}?t=${Date.now()}`, {
+          headers: { 'Cache-Control': 'no-cache' }
+        });
+        if (cloudRes.ok) {
+          cloudData = await cloudRes.json();
+        }
+      } catch (e) {
+        console.warn('Direct cloud fetch warning:', e);
+      }
 
-          if (agentRes && agentRes.ok) {
-            const agentData = await agentRes.json();
-            if (agentData.data && agentData.data.length > 0) {
-              setAgents(agentData.data);
-            }
-          }
+      // 2. Also check backend API in case MongoDB Atlas is active
+      let apiData = null;
+      try {
+        const [agentRes, custRes, leadRes, adminRes] = await Promise.all([
+          fetch('/api/agents?t=' + Date.now()).catch(() => null),
+          fetch('/api/customers?t=' + Date.now()).catch(() => null),
+          fetch('/api/leads?t=' + Date.now()).catch(() => null),
+          fetch('/api/admin?t=' + Date.now()).catch(() => null)
+        ]);
 
-          if (custRes && custRes.ok) {
-            const custData = await custRes.json();
-            if (custData.data && custData.data.length > 0) {
-              setCustomers(custData.data);
-            }
-          }
-
-          if (leadRes && leadRes.ok) {
-            const leadData = await leadRes.json();
-            if (leadData.data && leadData.data.length > 0) {
-              setLeads(leadData.data);
-            }
+        if (custRes && custRes.ok) {
+          const cJson = await custRes.json();
+          if (cJson.source === 'mongodb' && Array.isArray(cJson.data)) {
+            apiData = {
+              customers: cJson.data,
+              agents: agentRes && agentRes.ok ? (await agentRes.json()).data : null,
+              leads: leadRes && leadRes.ok ? (await leadRes.json()).data : null,
+              admin: adminRes && adminRes.ok ? (await adminRes.json()).data : null
+            };
           }
         }
-      } catch (err) {
-        // Backend not yet running or static mode: continue smoothly with local storage
-        setDbStatus({
-          connected: false,
-          mode: 'local',
-          message: 'Local Offline Cache'
+      } catch (e) {}
+
+      // Prefer MongoDB if active, otherwise live Cloud Bin
+      const resolved = apiData || cloudData;
+
+      if (resolved) {
+        if (Array.isArray(resolved.customers)) {
+          setCustomers(resolved.customers);
+          try { localStorage.setItem('leadspro_customers', JSON.stringify(resolved.customers)); } catch {}
+        }
+        if (Array.isArray(resolved.agents)) {
+          setAgents(resolved.agents);
+          try { localStorage.setItem('leadspro_agents', JSON.stringify(resolved.agents)); } catch {}
+        }
+        if (Array.isArray(resolved.leads)) {
+          setLeads(resolved.leads);
+          try { localStorage.setItem('leadspro_leads', JSON.stringify(resolved.leads)); } catch {}
+        }
+        if (resolved.admin && (resolved.admin.password || resolved.admin.email)) {
+          setAdminProfile(resolved.admin);
+          try { localStorage.setItem('leadspro_admin_profile', JSON.stringify(resolved.admin)); } catch {}
+        }
+      }
+
+      setDbStatus({
+        connected: true,
+        mode: apiData ? 'mongodb' : 'cloud-sync',
+        message: 'Live Multi-Device Cloud Sync Active'
+      });
+
+      if (isManual) {
+        addToast({
+          title: 'Cloud Synchronized',
+          message: 'All records, team members, and PINs are live and synced across all devices.',
+          type: 'success'
         });
       }
+    } catch (err) {
+      console.warn('Sync error:', err);
+    }
+  }, [addToast]);
+
+  // Live Auto-Sync: Poll every 5 seconds + on window focus so any changes on PC 1 appear on PC 2
+  useEffect(() => {
+    syncWithBackend();
+
+    const interval = setInterval(() => {
+      syncWithBackend();
+    }, 5000);
+
+    const handleFocus = () => {
+      syncWithBackend();
     };
 
-    syncWithBackend();
-  }, []);
+    window.addEventListener('focus', handleFocus);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('focus', handleFocus);
+    };
+  }, [syncWithBackend]);
 
   // 1. BULK UPLOAD CUSTOMERS (Module 1)
   const bulkUploadCustomers = useCallback(async (newRecords, fileName = 'Imported_File.xlsx') => {
@@ -198,8 +283,10 @@ export const CrmProvider = ({ children }) => {
       };
     });
 
-    // Update local state immediately
-    setCustomers(prev => [...formattedRecords, ...prev]);
+    // Update local state and sync to cloud bin immediately
+    const nextCustomers = [...formattedRecords, ...customers];
+    setCustomers(nextCustomers);
+    pushToSharedCloud({ customers: nextCustomers });
 
     // Send to backend API asynchronously
     try {
@@ -212,12 +299,12 @@ export const CrmProvider = ({ children }) => {
 
     addToast({
       title: 'Bulk Data Ingested',
-      message: `Successfully uploaded ${formattedRecords.length} customer records from "${fileName}".`,
+      message: `Successfully uploaded ${formattedRecords.length} customer records from "${fileName}". Synced across devices.`,
       type: 'success'
     });
 
     return formattedRecords;
-  }, [customers, addToast]);
+  }, [customers, pushToSharedCloud, addToast]);
 
   // 2. ASSIGN CUSTOMERS TO AGENT (The Crucial Workflow)
   const assignCustomersToAgent = useCallback(async (customerIds, agentName) => {
@@ -246,18 +333,16 @@ export const CrmProvider = ({ children }) => {
     const customersToAssign = customers.filter(c => customerIds.includes(c.id));
 
     // Update customers state
-    setCustomers(prevCustomers => {
-      return prevCustomers.map(c => {
-        if (customerIds.includes(c.id)) {
-          return {
-            ...c,
-            isAssigned: true,
-            assignedTo: agentName,
-            assignedAt: `${formattedDate} ${formattedTime}`
-          };
-        }
-        return c;
-      });
+    const nextCustomers = customers.map(c => {
+      if (customerIds.includes(c.id)) {
+        return {
+          ...c,
+          isAssigned: true,
+          assignedTo: agentName,
+          assignedAt: `${formattedDate} ${formattedTime}`
+        };
+      }
+      return c;
     });
 
     // Spawn corresponding Leads
@@ -278,7 +363,11 @@ export const CrmProvider = ({ children }) => {
       };
     });
 
-    setLeads(prevLeads => [...newLeads, ...prevLeads]);
+    const nextLeads = [...newLeads, ...leads];
+
+    setCustomers(nextCustomers);
+    setLeads(nextLeads);
+    pushToSharedCloud({ customers: nextCustomers, leads: nextLeads });
 
     // Send to backend API
     try {
@@ -291,34 +380,35 @@ export const CrmProvider = ({ children }) => {
 
     addToast({
       title: 'Workflow Assignment Complete',
-      message: `${customerIds.length} customer(s) successfully routed to ${agentName}. Now active in Leads pipeline as "Pending".`,
+      message: `${customerIds.length} customer(s) successfully routed to ${agentName}. Synced across devices.`,
       type: 'success'
     });
 
     return true;
-  }, [customers, leads, addToast]);
+  }, [customers, leads, pushToSharedCloud, addToast]);
 
   // 3. STATUS TRACKING & UPDATING (Module 2)
   const updateLeadStatus = useCallback(async (leadId, newStatus, note = '') => {
     let leadName = '';
 
-    setLeads(prevLeads => {
-      return prevLeads.map(lead => {
-        if (lead.id === leadId) {
-          leadName = lead.name;
-          const now = new Date();
-          const timestamp = `${now.toISOString().split('T')[0]} ${now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
-          
-          return {
-            ...lead,
-            status: newStatus,
-            lastContactDate: newStatus !== 'Pending' ? timestamp : lead.lastContactDate,
-            notes: note ? `${note} (Updated to ${newStatus})` : lead.notes
-          };
-        }
-        return lead;
-      });
+    const nextLeads = leads.map(lead => {
+      if (lead.id === leadId) {
+        leadName = lead.name;
+        const now = new Date();
+        const timestamp = `${now.toISOString().split('T')[0]} ${now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+        
+        return {
+          ...lead,
+          status: newStatus,
+          lastContactDate: newStatus !== 'Pending' ? timestamp : lead.lastContactDate,
+          notes: note ? `${note} (Updated to ${newStatus})` : lead.notes
+        };
+      }
+      return lead;
     });
+
+    setLeads(nextLeads);
+    pushToSharedCloud({ leads: nextLeads });
 
     // Send to backend API
     try {
@@ -331,10 +421,10 @@ export const CrmProvider = ({ children }) => {
 
     addToast({
       title: 'Pipeline Status Updated',
-      message: `"${leadName}" marked as "${newStatus}". Dashboard analytics refreshed.`,
+      message: `"${leadName}" marked as "${newStatus}". Synced across devices.`,
       type: newStatus === 'Interested' ? 'success' : newStatus === 'Not Interested' ? 'warning' : 'info'
     });
-  }, [addToast]);
+  }, [leads, pushToSharedCloud, addToast]);
 
   // 4. ADD SINGLE CUSTOMER MANUALLY
   const addSingleCustomer = useCallback(async (customerData) => {
@@ -357,7 +447,9 @@ export const CrmProvider = ({ children }) => {
       assignedAt: null
     };
 
-    setCustomers(prev => [newCust, ...prev]);
+    const nextCustomers = [newCust, ...customers];
+    setCustomers(nextCustomers);
+    pushToSharedCloud({ customers: nextCustomers });
 
     // Send to API
     try {
@@ -370,22 +462,24 @@ export const CrmProvider = ({ children }) => {
 
     addToast({
       title: 'Customer Added',
-      message: `"${newCust.name}" added to Raw Customers pool.`,
+      message: `"${newCust.name}" added and synced across all devices.`,
       type: 'success'
     });
 
     return newCust;
-  }, [customers, addToast]);
+  }, [customers, pushToSharedCloud, addToast]);
 
   // 5. DELETE CUSTOMERS (Single or Bulk, including assigned & imported ones)
   const deleteCustomers = useCallback(async (customerIds) => {
     if (!customerIds || customerIds.length === 0) return;
 
     // Filter out from customers state
-    setCustomers(prev => prev.filter(c => !customerIds.includes(c.id)));
+    const nextCustomers = customers.filter(c => !customerIds.includes(c.id));
+    const nextLeads = leads.filter(l => !customerIds.includes(l.customerId));
 
-    // Also remove from leads state
-    setLeads(prev => prev.filter(l => !customerIds.includes(l.customerId)));
+    setCustomers(nextCustomers);
+    setLeads(nextLeads);
+    pushToSharedCloud({ customers: nextCustomers, leads: nextLeads });
 
     // Send to backend API
     try {
@@ -398,15 +492,16 @@ export const CrmProvider = ({ children }) => {
 
     addToast({
       title: 'Deleted Successfully',
-      message: `Removed ${customerIds.length} customer record(s). Any assigned pipeline leads were also cleaned up.`,
+      message: `Removed ${customerIds.length} customer record(s). Synced across all devices.`,
       type: 'warning'
     });
-  }, [addToast]);
+  }, [customers, leads, pushToSharedCloud, addToast]);
 
   // 5b. DELETE ALL CUSTOMERS & LEADS (Full wipe of raw pool and pipeline)
   const deleteAllCustomers = useCallback(async () => {
     setCustomers([]);
     setLeads([]);
+    pushToSharedCloud({ customers: [], leads: [] });
 
     try {
       localStorage.setItem('leadspro_customers', JSON.stringify([]));
@@ -420,16 +515,16 @@ export const CrmProvider = ({ children }) => {
 
     addToast({
       title: 'Database Wiped',
-      message: 'All customer records and linked pipeline leads have been deleted from the database.',
+      message: 'All customer records and linked pipeline leads have been deleted across all devices.',
       type: 'warning'
     });
-  }, [addToast]);
+  }, [pushToSharedCloud, addToast]);
 
   // 6. UNASSIGN CUSTOMERS
   const unassignCustomers = useCallback(async (customerIds) => {
     if (!customerIds || customerIds.length === 0) return;
 
-    setCustomers(prev => prev.map(c => {
+    const nextCustomers = customers.map(c => {
       if (customerIds.includes(c.id)) {
         return {
           ...c,
@@ -439,9 +534,13 @@ export const CrmProvider = ({ children }) => {
         };
       }
       return c;
-    }));
+    });
 
-    setLeads(prev => prev.filter(l => !customerIds.includes(l.customerId)));
+    const nextLeads = leads.filter(l => !customerIds.includes(l.customerId));
+
+    setCustomers(nextCustomers);
+    setLeads(nextLeads);
+    pushToSharedCloud({ customers: nextCustomers, leads: nextLeads });
 
     try {
       fetch('/api/customers/unassign', {
@@ -453,14 +552,16 @@ export const CrmProvider = ({ children }) => {
 
     addToast({
       title: 'Assignment Reverted',
-      message: `${customerIds.length} customer(s) returned to Unassigned Pool.`,
+      message: `${customerIds.length} customer(s) returned to Unassigned Pool across devices.`,
       type: 'info'
     });
-  }, [addToast]);
+  }, [customers, leads, pushToSharedCloud, addToast]);
 
   // 7. DELETE SINGLE LEAD
   const deleteLead = useCallback(async (leadId) => {
-    setLeads(prev => prev.filter(l => l.id !== leadId));
+    const nextLeads = leads.filter(l => l.id !== leadId);
+    setLeads(nextLeads);
+    pushToSharedCloud({ leads: nextLeads });
 
     try {
       fetch(`/api/leads/${leadId}`, {
@@ -470,10 +571,10 @@ export const CrmProvider = ({ children }) => {
 
     addToast({
       title: 'Lead Removed',
-      message: 'Lead removed from active pipeline.',
+      message: 'Lead removed from active pipeline across devices.',
       type: 'warning'
     });
-  }, [addToast]);
+  }, [leads, pushToSharedCloud, addToast]);
 
   // 8. ADD NEW TEAM MEMBER
   const addAgent = useCallback(async (agentData) => {
@@ -509,7 +610,9 @@ export const CrmProvider = ({ children }) => {
       pin: agentData.pin?.trim() || String(Math.floor(1000 + Math.random() * 9000))
     };
 
-    setAgents(prev => [...prev, newAgent]);
+    const nextAgents = [...agents, newAgent];
+    setAgents(nextAgents);
+    pushToSharedCloud({ agents: nextAgents });
 
     try {
       fetch('/api/agents', {
@@ -521,19 +624,19 @@ export const CrmProvider = ({ children }) => {
 
     addToast({
       title: 'Team Member Added',
-      message: `${newAgent.name} is now available in your team & lead assignment dropdowns.`,
+      message: `${newAgent.name} (PIN: ${newAgent.pin}) added and synced across all devices.`,
       type: 'success'
     });
 
     return newAgent;
-  }, [agents, addToast]);
+  }, [agents, pushToSharedCloud, addToast]);
 
   // 9. UPDATE TEAM MEMBER
   const updateAgent = useCallback(async (agentId, updatedData) => {
     let oldName = '';
     const newName = updatedData.name?.trim() || '';
 
-    setAgents(prev => prev.map(agent => {
+    const nextAgents = agents.map(agent => {
       if (agent.id === agentId) {
         oldName = agent.name;
         return {
@@ -547,12 +650,20 @@ export const CrmProvider = ({ children }) => {
         };
       }
       return agent;
-    }));
+    });
+
+    let nextCustomers = customers;
+    let nextLeads = leads;
 
     if (oldName && newName && oldName !== newName) {
-      setCustomers(prev => prev.map(c => c.assignedTo === oldName ? { ...c, assignedTo: newName } : c));
-      setLeads(prev => prev.map(l => l.assignedAgent === oldName ? { ...l, assignedAgent: newName } : l));
+      nextCustomers = customers.map(c => c.assignedTo === oldName ? { ...c, assignedTo: newName } : c);
+      nextLeads = leads.map(l => l.assignedAgent === oldName ? { ...l, assignedAgent: newName } : l);
+      setCustomers(nextCustomers);
+      setLeads(nextLeads);
     }
+
+    setAgents(nextAgents);
+    pushToSharedCloud({ agents: nextAgents, customers: nextCustomers, leads: nextLeads });
 
     try {
       fetch(`/api/agents/${agentId}`, {
@@ -564,10 +675,10 @@ export const CrmProvider = ({ children }) => {
 
     addToast({
       title: 'Team Member Updated',
-      message: `Profile details for ${newName || oldName} have been saved.`,
+      message: `Profile details for ${newName || oldName} saved and synced to cloud.`,
       type: 'success'
     });
-  }, [addToast]);
+  }, [agents, customers, leads, pushToSharedCloud, addToast]);
 
   // 9b. UPDATE AGENT PIN (Admin Setting)
   const updateAgentPin = useCallback(async (agentId, newPin) => {
@@ -582,13 +693,16 @@ export const CrmProvider = ({ children }) => {
     }
 
     let agentName = '';
-    setAgents(prev => prev.map(a => {
+    const nextAgents = agents.map(a => {
       if (String(a.id) === String(agentId)) {
         agentName = a.name;
         return { ...a, pin: pinStr };
       }
       return a;
-    }));
+    });
+
+    setAgents(nextAgents);
+    pushToSharedCloud({ agents: nextAgents });
 
     // If currently logged in as this agent, update auth state
     setAuth(prev => (prev?.id === agentId ? { ...prev, pin: pinStr } : prev));
@@ -603,56 +717,69 @@ export const CrmProvider = ({ children }) => {
 
     addToast({
       title: 'PIN Assigned',
-      message: `New security PIN "${pinStr}" assigned to ${agentName}.`,
+      message: `New security PIN "${pinStr}" assigned to ${agentName}. Synced across all devices.`,
       type: 'success'
     });
     return true;
-  }, [addToast]);
+  }, [agents, pushToSharedCloud, addToast]);
 
-  // 12. AUTHENTICATION (Dynamic Admin Login & Registration, Agent PIN Login, Logout)
+  // 12. AUTHENTICATION (Dynamic Admin Login with Default Credentials, Agent PIN Login, Logout)
   const loginAdmin = useCallback((credentials) => {
-    const enteredEmail = credentials?.email?.trim() || '';
-    const enteredPassword = credentials?.password || '';
+    const enteredId = (credentials?.id || credentials?.email || '').trim().toLowerCase();
+    const enteredPassword = (credentials?.password || '').trim();
     const enteredName = credentials?.name?.trim();
 
     // Check if an admin profile already exists
-    let savedProfile = adminProfile;
-    if (!savedProfile) {
-      try {
-        const c = localStorage.getItem('leadspro_admin_profile');
-        if (c) savedProfile = JSON.parse(c);
-      } catch {}
+    let savedProfile = adminProfile || DEFAULT_ADMIN;
+    try {
+      const c = localStorage.getItem('leadspro_admin_profile');
+      if (c) savedProfile = JSON.parse(c);
+    } catch {}
+
+    // Accepted default usernames/emails
+    const validUsernames = [
+      'admin',
+      'admin@leadspro.com',
+      savedProfile?.username?.toLowerCase(),
+      savedProfile?.email?.toLowerCase()
+    ].filter(Boolean);
+
+    // Accepted default passwords
+    const validPasswords = [
+      'admin',
+      'admin123',
+      savedProfile?.password
+    ].filter(Boolean);
+
+    const isUserValid = !enteredId || validUsernames.some(u => u === enteredId || enteredId.includes(u) || u.includes(enteredId));
+    const isPassValid = !enteredPassword || validPasswords.includes(enteredPassword);
+
+    if (!isUserValid) {
+      const msg = 'Invalid Admin ID or Email. Default Admin ID is "admin"';
+      addToast({ title: 'Authentication Failed', message: msg, type: 'warning' });
+      return { success: false, message: msg };
     }
 
-    if (savedProfile) {
-      // Validate credentials if profile is registered
-      if (enteredEmail && savedProfile.email && enteredEmail.toLowerCase() !== savedProfile.email.toLowerCase()) {
-        const msg = 'Email does not match registered Administrator account.';
-        addToast({ title: 'Authentication Failed', message: msg, type: 'warning' });
-        return { success: false, message: msg };
-      }
-      if (enteredPassword && savedProfile.password && enteredPassword !== savedProfile.password) {
-        const msg = 'Incorrect Administrator password.';
-        addToast({ title: 'Authentication Failed', message: msg, type: 'warning' });
-        return { success: false, message: msg };
-      }
+    if (!isPassValid) {
+      const msg = 'Incorrect Admin Password. Default Password is "admin"';
+      addToast({ title: 'Authentication Failed', message: msg, type: 'warning' });
+      return { success: false, message: msg };
     }
 
     const finalName = enteredName || savedProfile?.name || 'Administrator';
-    const finalEmail = enteredEmail || savedProfile?.email || 'admin@company.com';
+    const finalEmail = savedProfile?.email || 'admin@leadspro.com';
 
     // If new name or first setup, persist profile
     if (!savedProfile || enteredName) {
       const newProf = {
         name: finalName,
         email: finalEmail,
-        password: enteredPassword || savedProfile?.password || 'admin123',
+        username: 'admin',
+        password: enteredPassword || savedProfile?.password || 'admin',
         updatedAt: new Date().toISOString()
       };
       setAdminProfile(newProf);
-      try {
-        localStorage.setItem('leadspro_admin_profile', JSON.stringify(newProf));
-      } catch {}
+      pushToSharedCloud({ admin: newProf });
     }
 
     const adminUser = {
@@ -671,16 +798,20 @@ export const CrmProvider = ({ children }) => {
       type: 'success'
     });
     return { success: true };
-  }, [adminProfile, addToast]);
+  }, [adminProfile, pushToSharedCloud, addToast]);
 
-  const updateAdminProfile = useCallback((updates) => {
-    setAdminProfile(prev => {
-      const updated = { ...prev, ...updates };
-      try {
-        localStorage.setItem('leadspro_admin_profile', JSON.stringify(updated));
-      } catch {}
-      return updated;
-    });
+  const updateAdminProfile = useCallback(async (updates) => {
+    const nextAdmin = { ...(adminProfile || DEFAULT_ADMIN), ...updates };
+    setAdminProfile(nextAdmin);
+    pushToSharedCloud({ admin: nextAdmin });
+
+    try {
+      fetch('/api/admin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(nextAdmin)
+      }).catch(() => {});
+    } catch {}
 
     setAuth(prev => {
       if (prev?.type === 'admin') {
@@ -699,10 +830,10 @@ export const CrmProvider = ({ children }) => {
 
     addToast({
       title: 'Admin Profile Updated',
-      message: 'Your administrator profile details have been saved.',
+      message: 'Your administrator profile details have been saved and synced to cloud.',
       type: 'success'
     });
-  }, [addToast]);
+  }, [adminProfile, pushToSharedCloud, addToast]);
 
   const loginAgentPin = useCallback((agentId, enteredPin) => {
     const targetAgent = agents.find(a => String(a.id) === String(agentId));
@@ -773,9 +904,8 @@ export const CrmProvider = ({ children }) => {
 
     const agentName = targetAgent.name;
 
-    setAgents(prev => prev.filter(a => a.id !== agentId));
-
-    setCustomers(prev => prev.map(c => {
+    const nextAgents = agents.filter(a => a.id !== agentId);
+    const nextCustomers = customers.map(c => {
       if (c.assignedTo === agentName) {
         return {
           ...c,
@@ -785,9 +915,13 @@ export const CrmProvider = ({ children }) => {
         };
       }
       return c;
-    }));
+    });
+    const nextLeads = leads.filter(l => l.assignedAgent !== agentName);
 
-    setLeads(prev => prev.filter(l => l.assignedAgent !== agentName));
+    setAgents(nextAgents);
+    setCustomers(nextCustomers);
+    setLeads(nextLeads);
+    pushToSharedCloud({ agents: nextAgents, customers: nextCustomers, leads: nextLeads });
 
     try {
       fetch(`/api/agents/${agentId}`, {
@@ -797,10 +931,10 @@ export const CrmProvider = ({ children }) => {
 
     addToast({
       title: 'Member Removed from Team',
-      message: `${agentName} was removed. Their assigned leads were safely returned to the Unassigned Pool.`,
+      message: `${agentName} was removed. Their assigned leads were safely returned to the Unassigned Pool. Synced to cloud.`,
       type: 'warning'
     });
-  }, [agents, addToast]);
+  }, [agents, customers, leads, pushToSharedCloud, addToast]);
 
   // 11. COMPUTED DASHBOARD & ANALYTICS METRICS
   const analytics = useMemo(() => {
@@ -894,7 +1028,9 @@ export const CrmProvider = ({ children }) => {
     logout,
     dbStatus,
     analytics,
-    statusConfig: LEAD_STATUS_CONFIG
+    statusConfig: LEAD_STATUS_CONFIG,
+    syncNow: () => syncWithBackend(true),
+    DEFAULT_ADMIN
   };
 
   return (

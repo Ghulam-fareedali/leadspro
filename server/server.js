@@ -7,6 +7,7 @@ import customerRoutes from './routes/customerRoutes.js';
 import leadRoutes from './routes/leadRoutes.js';
 import agentRoutes from './routes/agentRoutes.js';
 import statsRoutes from './routes/statsRoutes.js';
+import adminRoutes from './routes/adminRoutes.js';
 
 dotenv.config();
 
@@ -50,6 +51,9 @@ app.use('/agents', agentRoutes);
 
 app.use('/api/stats', statsRoutes);
 app.use('/stats', statsRoutes);
+
+app.use('/api/admin', adminRoutes);
+app.use('/admin', adminRoutes);
 
 // Root route for API verification
 app.get('/', (req, res) => {

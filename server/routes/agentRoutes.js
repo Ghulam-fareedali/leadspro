@@ -2,25 +2,27 @@ import express from 'express';
 import { Agent } from '../models/Agent.js';
 import { Customer } from '../models/Customer.js';
 import { Lead } from '../models/Lead.js';
+import { getCloudData, saveCloudData } from '../config/cloudStorage.js';
 
 const router = express.Router();
 
-// Fallback guard if MONGODB_URI is not yet configured
-router.use((req, res, next) => {
-  if (!process.env.MONGODB_URI) {
-    if (req.method === 'GET') {
-      return res.json({ success: true, count: 0, data: [], note: 'MONGODB_URI not configured' });
-    }
-    return res.json({ success: true, message: 'Local mode active', data: req.body });
-  }
-  next();
-});
+const isMongoActive = () => Boolean(process.env.MONGODB_URI);
 
 // GET all agents
 router.get('/', async (req, res) => {
   try {
-    const agents = await Agent.find().sort({ id: 1 });
-    res.json({ success: true, count: agents.length, data: agents });
+    if (isMongoActive()) {
+      const agents = await Agent.find().sort({ id: 1 });
+      return res.json({ success: true, count: agents.length, data: agents, source: 'mongodb' });
+    }
+
+    const cloudData = await getCloudData();
+    res.json({
+      success: true,
+      count: cloudData.agents.length,
+      data: cloudData.agents,
+      source: 'cloud_sync'
+    });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
@@ -34,19 +36,49 @@ router.post('/', async (req, res) => {
       return res.status(400).json({ success: false, error: 'Name is required' });
     }
 
-    const lastAgent = await Agent.findOne().sort({ id: -1 });
-    const nextId = lastAgent ? lastAgent.id + 1 : 1;
+    const defaultAvatars = [
+      "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&auto=format&fit=crop&q=80",
+      "https://images.unsplash.com/photo-1570295999919-56ceb5ecca61?w=150&auto=format&fit=crop&q=80",
+      "https://images.unsplash.com/photo-1580489944761-15a19d654956?w=150&auto=format&fit=crop&q=80",
+      "https://images.unsplash.com/photo-1628157582853-a796fa650a6a?w=150&auto=format&fit=crop&q=80"
+    ];
 
-    const newAgent = await Agent.create({
+    if (isMongoActive()) {
+      const lastAgent = await Agent.findOne().sort({ id: -1 });
+      const nextId = lastAgent ? lastAgent.id + 1 : 1;
+      const pickedAvatar = avatar || defaultAvatars[nextId % defaultAvatars.length];
+
+      const newAgent = await Agent.create({
+        id: nextId,
+        name: name.trim(),
+        role: role || 'Sales Representative',
+        email: email || '',
+        phone: phone || '',
+        avatar: pickedAvatar,
+        color: color || 'blue',
+        pin: pin ? String(pin).trim() : '1234'
+      });
+
+      return res.status(201).json({ success: true, data: newAgent });
+    }
+
+    const cloudData = await getCloudData();
+    const nextId = cloudData.agents.length > 0 ? Math.max(...cloudData.agents.map(a => a.id)) + 1 : 1;
+    const pickedAvatar = avatar || defaultAvatars[nextId % defaultAvatars.length];
+
+    const newAgent = {
       id: nextId,
       name: name.trim(),
       role: role || 'Sales Representative',
       email: email || '',
-      phone: phone || '0300-1234567',
-      avatar: avatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&auto=format&fit=crop&q=80',
+      phone: phone || '',
+      avatar: pickedAvatar,
       color: color || 'blue',
       pin: pin ? String(pin).trim() : '1234'
-    });
+    };
+
+    cloudData.agents.push(newAgent);
+    await saveCloudData(cloudData);
 
     res.status(201).json({ success: true, data: newAgent });
   } catch (err) {
@@ -59,83 +91,124 @@ router.put('/:id/pin', async (req, res) => {
   try {
     const { id } = req.params;
     const { pin } = req.body;
+
     if (!pin || !String(pin).trim()) {
       return res.status(400).json({ success: false, error: 'PIN is required' });
     }
 
-    const existing = await Agent.findOne({ id: Number(id) });
-    if (!existing) {
-      return res.status(404).json({ success: false, error: 'Agent not found' });
+    const pinStr = String(pin).trim();
+
+    if (isMongoActive()) {
+      const updated = await Agent.findOneAndUpdate(
+        { id: Number(id) },
+        { $set: { pin: pinStr } },
+        { new: true }
+      );
+      if (!updated) return res.status(404).json({ success: false, error: 'Agent not found' });
+      return res.json({ success: true, message: `PIN updated to ${pinStr}`, data: updated });
     }
 
-    existing.pin = String(pin).trim();
-    await existing.save();
+    const cloudData = await getCloudData();
+    let found = false;
+    cloudData.agents = cloudData.agents.map(a => {
+      if (String(a.id) === String(id)) {
+        found = true;
+        return { ...a, pin: pinStr };
+      }
+      return a;
+    });
 
-    res.json({ success: true, message: `PIN updated successfully for ${existing.name}`, data: existing });
+    if (!found) return res.status(404).json({ success: false, error: 'Agent not found' });
+
+    await saveCloudData(cloudData);
+    res.json({ success: true, message: `PIN updated to ${pinStr}` });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
 });
 
-// PUT update agent (and sync customer / lead references)
+// PUT update agent profile
 router.put('/:id', async (req, res) => {
   try {
     const { id } = req.params;
     const { name, role, email, phone, avatar, pin } = req.body;
 
-    const existing = await Agent.findOne({ id: Number(id) });
-    if (!existing) {
-      return res.status(404).json({ success: false, error: 'Agent not found' });
+    if (isMongoActive()) {
+      const updated = await Agent.findOneAndUpdate(
+        { id: Number(id) },
+        {
+          $set: {
+            ...(name ? { name: name.trim() } : {}),
+            ...(role ? { role: role.trim() } : {}),
+            ...(email ? { email: email.trim() } : {}),
+            ...(phone ? { phone: phone.trim() } : {}),
+            ...(avatar ? { avatar } : {}),
+            ...(pin ? { pin: String(pin).trim() } : {})
+          }
+        },
+        { new: true }
+      );
+      if (!updated) return res.status(404).json({ success: false, error: 'Agent not found' });
+      return res.json({ success: true, data: updated });
     }
 
-    const oldName = existing.name;
-    const newName = name?.trim() || oldName;
+    const cloudData = await getCloudData();
+    cloudData.agents = cloudData.agents.map(a => {
+      if (String(a.id) === String(id)) {
+        return {
+          ...a,
+          ...(name ? { name: name.trim() } : {}),
+          ...(role ? { role: role.trim() } : {}),
+          ...(email ? { email: email.trim() } : {}),
+          ...(phone ? { phone: phone.trim() } : {}),
+          ...(avatar ? { avatar } : {}),
+          ...(pin ? { pin: String(pin).trim() } : {})
+        };
+      }
+      return a;
+    });
 
-    existing.name = newName;
-    if (role) existing.role = role;
-    if (email) existing.email = email;
-    if (phone) existing.phone = phone;
-    if (avatar) existing.avatar = avatar;
-    if (pin !== undefined) existing.pin = String(pin).trim();
-
-    await existing.save();
-
-    // Sync name in customers & leads if changed
-    if (oldName !== newName) {
-      await Customer.updateMany({ assignedTo: oldName }, { $set: { assignedTo: newName } });
-      await Lead.updateMany({ assignedAgent: oldName }, { $set: { assignedAgent: newName } });
-    }
-
-    res.json({ success: true, data: existing });
+    await saveCloudData(cloudData);
+    res.json({ success: true, message: 'Agent updated' });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
 });
 
-// DELETE remove agent (and return assigned leads back to pool)
+// DELETE agent
 router.delete('/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const existing = await Agent.findOne({ id: Number(id) });
-    if (!existing) {
-      return res.status(404).json({ success: false, error: 'Agent not found' });
+
+    if (isMongoActive()) {
+      const agent = await Agent.findOne({ id: Number(id) });
+      if (!agent) return res.status(404).json({ success: false, error: 'Agent not found' });
+
+      await Agent.findOneAndDelete({ id: Number(id) });
+      await Customer.updateMany(
+        { assignedTo: agent.name },
+        { $set: { isAssigned: false, assignedTo: null, assignedAt: null } }
+      );
+      await Lead.deleteMany({ assignedAgent: agent.name });
+
+      return res.json({ success: true, message: `Agent ${agent.name} deleted` });
     }
 
-    const agentName = existing.name;
+    const cloudData = await getCloudData();
+    const agent = cloudData.agents.find(a => String(a.id) === String(id));
+    if (!agent) return res.status(404).json({ success: false, error: 'Agent not found' });
 
-    // Return customers to unassigned pool
-    await Customer.updateMany(
-      { assignedTo: agentName },
-      { $set: { isAssigned: false, assignedTo: null, assignedAt: null } }
-    );
+    cloudData.agents = cloudData.agents.filter(a => String(a.id) !== String(id));
+    cloudData.customers = cloudData.customers.map(c => {
+      if (c.assignedTo === agent.name) {
+        return { ...c, isAssigned: false, assignedTo: null, assignedAt: null };
+      }
+      return c;
+    });
+    cloudData.leads = cloudData.leads.filter(l => l.assignedAgent !== agent.name);
 
-    // Delete their leads
-    await Lead.deleteMany({ assignedAgent: agentName });
-
-    // Remove agent
-    await Agent.deleteOne({ id: Number(id) });
-
-    res.json({ success: true, message: `Removed agent ${agentName} and returned leads to pool` });
+    await saveCloudData(cloudData);
+    res.json({ success: true, message: `Agent ${agent.name} deleted` });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
