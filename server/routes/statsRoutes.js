@@ -6,6 +6,29 @@ import { INITIAL_AGENTS, INITIAL_CUSTOMERS, INITIAL_LEADS } from '../../src/data
 
 const router = express.Router();
 
+// Fallback guard if MONGODB_URI is not yet configured
+router.use((req, res, next) => {
+  if (!process.env.MONGODB_URI) {
+    return res.json({ 
+      success: true, 
+      data: {
+        totalCustomersPool: 0,
+        totalLeadsAssigned: 0,
+        unassignedCount: 0,
+        assignedCustomersCount: 0,
+        pendingCount: 0,
+        connectedCount: 0,
+        interestedCount: 0,
+        notInterestedCount: 0,
+        interestRate: 0,
+        agentBreakdown: []
+      },
+      note: 'MONGODB_URI not configured'
+    });
+  }
+  next();
+});
+
 // GET aggregated stats for dashboard
 router.get('/', async (req, res) => {
   try {

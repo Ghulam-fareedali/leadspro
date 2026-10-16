@@ -38,11 +38,23 @@ app.get('/api/health', (req, res) => {
   });
 });
 
-// Mount Routes
+// Mount Routes - Support both with and without /api prefix for Vercel Serverless Rewrites
 app.use('/api/customers', customerRoutes);
+app.use('/customers', customerRoutes);
+
 app.use('/api/leads', leadRoutes);
+app.use('/leads', leadRoutes);
+
 app.use('/api/agents', agentRoutes);
+app.use('/agents', agentRoutes);
+
 app.use('/api/stats', statsRoutes);
+app.use('/stats', statsRoutes);
+
+// Root route for API verification
+app.get('/', (req, res) => {
+  res.json({ status: 'ok', message: 'OmniFlow CRM API is running' });
+});
 
 // Global Error Handler
 app.use((err, req, res, next) => {
@@ -50,9 +62,9 @@ app.use((err, req, res, next) => {
   res.status(500).json({ success: false, error: err.message || 'Internal Server Error' });
 });
 
-// Start local server if run directly (not serverless)
+// Start local server if run directly (NEVER on Vercel serverless)
 const PORT = process.env.PORT || 5000;
-if (process.env.NODE_ENV !== 'production' || !process.env.VERCEL) {
+if (!process.env.VERCEL && !process.env.AWS_LAMBDA_FUNCTION_NAME) {
   app.listen(PORT, async () => {
     console.log(`🚀 OmniFlow CRM Backend running on http://localhost:${PORT}`);
     try {
