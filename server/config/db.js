@@ -1,5 +1,14 @@
 import mongoose from 'mongoose';
 import dotenv from 'dotenv';
+import dns from 'dns';
+
+// Fix Windows / ISP querySrv ECONNREFUSED issue for MongoDB SRV records
+try {
+  dns.setServers(['8.8.8.8', '1.1.1.1']);
+} catch {
+  // Ignore in restricted environments
+}
+
 dotenv.config();
 
 /**
