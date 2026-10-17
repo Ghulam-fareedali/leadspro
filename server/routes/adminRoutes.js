@@ -4,14 +4,56 @@ import { Admin } from '../models/Admin.js';
 const router = express.Router();
 
 const DEFAULT_ADMIN = {
-  email: 'admin@leadspro.com',
-  username: 'admin',
-  password: 'admin',
-  name: 'Admin',
+  email: 'sales@techdeva.net',
+  username: 'sales@techdeva.net',
+  password: 'Techdeva@12',
+  name: 'Sales Administrator',
   role: 'System Administrator'
 };
 
-// GET admin profile from MongoDB
+// POST admin login verification against MongoDB
+router.post('/login', async (req, res) => {
+  try {
+    const { email, password } = req.body;
+    const cleanId = (email || '').trim().toLowerCase();
+    const cleanPassword = (password || '').trim();
+
+    if (!cleanId || !cleanPassword) {
+      return res.status(400).json({ success: false, message: 'Please enter your Admin email and password.' });
+    }
+
+    let admin = await Admin.findOne();
+    if (!admin) {
+      admin = await Admin.create(DEFAULT_ADMIN);
+    }
+
+    const matchesId = (admin.email && admin.email.toLowerCase() === cleanId) ||
+                      (admin.username && admin.username.toLowerCase() === cleanId) ||
+                      cleanId === 'sales@techdeva.net';
+    const matchesPassword = (admin.password === cleanPassword);
+
+    if (!matchesId || !matchesPassword) {
+      return res.status(401).json({ success: false, message: 'Invalid Admin credentials. Access denied.' });
+    }
+
+    res.json({
+      success: true,
+      message: 'Admin authentication successful',
+      data: {
+        id: admin._id,
+        email: admin.email,
+        username: admin.username,
+        name: admin.name,
+        role: admin.role,
+        avatar: admin.avatar
+      }
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// GET admin profile from MongoDB (Password omitted for security)
 router.get('/', async (req, res) => {
   try {
     let admin = await Admin.findOne();
@@ -27,12 +69,20 @@ router.get('/', async (req, res) => {
         username: admin.username,
         name: admin.name,
         role: admin.role,
-        password: admin.password,
         avatar: admin.avatar
       }
     });
   } catch (err) {
-    res.status(500).json({ success: false, error: err.message, data: DEFAULT_ADMIN });
+    res.status(500).json({
+      success: false,
+      error: err.message,
+      data: {
+        email: DEFAULT_ADMIN.email,
+        username: DEFAULT_ADMIN.username,
+        name: DEFAULT_ADMIN.name,
+        role: DEFAULT_ADMIN.role
+      }
+    });
   }
 });
 

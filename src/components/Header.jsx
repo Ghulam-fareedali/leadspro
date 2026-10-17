@@ -36,7 +36,7 @@ export const Header = ({ onOpenUpload, searchQuery, setSearchQuery }) => {
     updateAdminProfile({
       name: editName.trim(),
       email: editEmail.trim(),
-      password: editPassword.trim()
+      ...(editPassword.trim() ? { password: editPassword.trim() } : {})
     });
     setShowAdminModal(false);
   };
@@ -179,7 +179,7 @@ export const Header = ({ onOpenUpload, searchQuery, setSearchQuery }) => {
               if (auth?.type === 'admin') {
                 setEditName(auth.name || '');
                 setEditEmail(auth.email || '');
-                setEditPassword(adminProfile?.password || '');
+                setEditPassword('');
                 setShowAdminModal(true);
               }
             }}
@@ -281,13 +281,12 @@ export const Header = ({ onOpenUpload, searchQuery, setSearchQuery }) => {
               </div>
 
               <div className="space-y-1">
-                <label className="block font-semibold text-slate-700">Admin Login Password</label>
+                <label className="block font-semibold text-slate-700">New Password (leave empty to keep current)</label>
                 <input
                   type="password"
-                  required
                   value={editPassword}
                   onChange={(e) => setEditPassword(e.target.value)}
-                  placeholder="Enter new password"
+                  placeholder="Enter new password (optional)"
                   className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 transition-all"
                 />
               </div>

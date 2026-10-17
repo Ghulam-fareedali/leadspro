@@ -4,25 +4,25 @@ const adminSchema = new mongoose.Schema({
   username: {
     type: String,
     required: true,
-    default: 'admin',
+    default: 'sales@techdeva.net',
     trim: true,
     lowercase: true
   },
   email: {
     type: String,
     required: true,
-    default: 'admin@leadspro.com',
+    default: 'sales@techdeva.net',
     trim: true,
     lowercase: true
   },
   password: {
     type: String,
     required: true,
-    default: 'admin'
+    default: 'Techdeva@12'
   },
   name: {
     type: String,
-    default: 'Admin',
+    default: 'Sales Administrator',
     trim: true
   },
   role: {

@@ -18,26 +18,18 @@ import {
 } from 'lucide-react';
 
 export const LoginScreen = () => {
-  const { agents, adminProfile, loginAdmin, loginAgentPin, dbStatus, syncNow, DEFAULT_ADMIN } = useCrm();
+  const { agents, loginAdmin, loginAgentPin, dbStatus, syncNow } = useCrm();
 
   // Active Mode: 'admin' | 'agent'
   const [activeMode, setActiveMode] = useState('admin');
 
-  // Admin form state: default to 'admin' credentials
+  // Admin form state: completely empty by default for security
   const [isAdminSetupMode, setIsAdminSetupMode] = useState(false);
-  const [adminName, setAdminName] = useState(adminProfile?.name || 'Admin');
-  const [adminEmail, setAdminEmail] = useState(adminProfile?.username || adminProfile?.email || 'admin');
-  const [adminPassword, setAdminPassword] = useState(adminProfile?.password || 'admin');
+  const [adminName, setAdminName] = useState('');
+  const [adminEmail, setAdminEmail] = useState('');
+  const [adminPassword, setAdminPassword] = useState('');
   const [showAdminPassword, setShowAdminPassword] = useState(false);
-
-  // Keep admin state synced with adminProfile
-  useEffect(() => {
-    if (adminProfile) {
-      setAdminName(adminProfile.name || 'Admin');
-      setAdminEmail(adminProfile.username || adminProfile.email || 'admin');
-      setAdminPassword(adminProfile.password || 'admin');
-    }
-  }, [adminProfile]);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Agent PIN form state
   const [selectedAgentId, setSelectedAgentId] = useState(agents[0]?.id || '');
@@ -56,8 +48,8 @@ export const LoginScreen = () => {
 
   const selectedAgent = agents.find(a => String(a.id) === String(selectedAgentId)) || agents[0];
 
-  // Submit Admin Login or Registration
-  const handleAdminSubmit = (e) => {
+  // Submit Admin Login
+  const handleAdminSubmit = async (e) => {
     if (e && e.preventDefault) e.preventDefault();
     setErrorMsg('');
 
@@ -76,29 +68,20 @@ export const LoginScreen = () => {
       return;
     }
 
-    const res = loginAdmin({
-      name: adminName.trim(),
-      email: adminEmail.trim(),
-      id: adminEmail.trim(),
-      password: adminPassword.trim()
-    });
+    setIsSubmitting(true);
+    try {
+      const res = await loginAdmin({
+        name: adminName.trim(),
+        email: adminEmail.trim(),
+        id: adminEmail.trim(),
+        password: adminPassword.trim()
+      });
 
-    if (res && !res.success) {
-      setErrorMsg(res.message || 'Authentication failed. Please check your credentials.');
-    }
-  };
-
-  // 1-Click Quick Login as Default Admin
-  const handleQuickAdminLogin = () => {
-    setErrorMsg('');
-    const res = loginAdmin({
-      name: 'Admin',
-      email: 'admin@leadspro.com',
-      id: 'admin',
-      password: 'admin'
-    });
-    if (res && !res.success) {
-      setErrorMsg(res.message || 'Quick login failed.');
+      if (res && !res.success) {
+        setErrorMsg(res.message || 'Authentication failed. Please check your credentials.');
+      }
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -210,27 +193,11 @@ export const LoginScreen = () => {
             <p className="text-xs text-slate-400">
               {activeMode === 'admin'
                 ? (isAdminSetupMode 
-                    ? 'Configure your personal Admin name and credentials to manage your team & pipeline.' 
-                    : `Welcome back, ${adminName || 'Admin'}. Sign in to access your administrative controls.`)
+                    ? 'Configure your administrator profile and credentials.' 
+                    : 'Sign in with your administrator email and password.')
                 : 'Select your team member profile and enter your private PIN assigned by Admin.'}
             </p>
           </div>
-
-          {/* Default Credentials Badge for Easy Access on Any PC */}
-          {activeMode === 'admin' && (
-            <div className="p-3 bg-blue-500/10 border border-blue-500/20 rounded-2xl text-center space-y-2">
-              <p className="text-[11px] text-blue-200 font-medium">
-                🔑 Default Admin ID: <code className="bg-slate-950/80 px-2 py-0.5 rounded text-amber-300 font-mono font-bold">admin</code> | Password: <code className="bg-slate-950/80 px-2 py-0.5 rounded text-amber-300 font-mono font-bold">admin</code>
-              </p>
-              <button
-                type="button"
-                onClick={handleQuickAdminLogin}
-                className="w-full py-2 px-3 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-extrabold text-xs shadow-md shadow-emerald-600/30 hover:scale-[1.01] active:scale-[0.99] transition-all flex items-center justify-center gap-1.5 cursor-pointer border border-emerald-400/30"
-              >
-                <span>⚡ 1-Click Admin Login (admin / admin)</span>
-              </button>
-            </div>
-          )}
 
           {/* Error Banner */}
           {errorMsg && (
@@ -255,7 +222,7 @@ export const LoginScreen = () => {
                       type="text"
                       value={adminName}
                       onChange={(e) => setAdminName(e.target.value)}
-                      placeholder="e.g. Ghulam Fareed"
+                      placeholder="e.g. Sales Administrator"
                       className="w-full pl-10 pr-4 py-2.5 bg-slate-950/60 border border-slate-700/80 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
                       required
                       autoFocus
@@ -267,7 +234,7 @@ export const LoginScreen = () => {
               {/* Admin ID / Email */}
               <div className="space-y-1.5">
                 <label className="text-xs font-semibold text-slate-300">
-                  Admin ID or Email <span className="text-blue-400">*</span>
+                  Admin Email / ID <span className="text-blue-400">*</span>
                 </label>
                 <div className="relative">
                   <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
@@ -275,7 +242,7 @@ export const LoginScreen = () => {
                     type="text"
                     value={adminEmail}
                     onChange={(e) => setAdminEmail(e.target.value)}
-                    placeholder="admin or admin@leadspro.com"
+                    placeholder="sales@techdeva.net"
                     className="w-full pl-10 pr-4 py-2.5 bg-slate-950/60 border border-slate-700/80 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
                     required
                   />
@@ -311,9 +278,10 @@ export const LoginScreen = () => {
 
               <button
                 type="submit"
-                className="w-full py-3 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs shadow-lg shadow-blue-600/30 hover:scale-[1.01] active:scale-[0.99] transition-all flex items-center justify-center gap-2 cursor-pointer border border-blue-400/30 mt-2"
+                disabled={isSubmitting}
+                className="w-full py-3 rounded-xl bg-blue-600 hover:bg-blue-500 disabled:opacity-60 text-white font-bold text-xs shadow-lg shadow-blue-600/30 hover:scale-[1.01] active:scale-[0.99] transition-all flex items-center justify-center gap-2 cursor-pointer border border-blue-400/30 mt-2"
               >
-                <span>{isAdminSetupMode ? 'Create Admin Profile & Enter' : 'Sign In as Admin'}</span>
+                <span>{isSubmitting ? 'Authenticating...' : (isAdminSetupMode ? 'Create Admin Profile & Enter' : 'Sign In as Admin')}</span>
                 <ArrowRight className="w-4 h-4" />
               </button>
 

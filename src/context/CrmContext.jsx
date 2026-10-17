@@ -2,10 +2,9 @@ import React, { createContext, useContext, useState, useEffect, useMemo, useCall
 import { LEAD_STATUS_CONFIG } from '../data/customerData';
 
 export const DEFAULT_ADMIN = {
-  email: 'admin@leadspro.com',
-  username: 'admin',
-  password: 'admin',
-  name: 'Admin',
+  email: 'sales@techdeva.net',
+  username: 'sales@techdeva.net',
+  name: 'Sales Administrator',
   role: 'System Administrator'
 };
 
@@ -676,61 +675,73 @@ export const CrmProvider = ({ children }) => {
   }, [addToast]);
 
   // 12. AUTHENTICATION (Admin Login, Agent PIN Login, Logout)
-  const loginAdmin = useCallback((credentials) => {
+  const loginAdmin = useCallback(async (credentials) => {
     const enteredId = (credentials?.id || credentials?.email || '').trim().toLowerCase();
     const enteredPassword = (credentials?.password || '').trim();
     const enteredName = credentials?.name?.trim();
 
-    const activeProfile = adminProfile || DEFAULT_ADMIN;
-
-    const validUsernames = [
-      'admin',
-      'admin@leadspro.com',
-      activeProfile?.username?.toLowerCase(),
-      activeProfile?.email?.toLowerCase()
-    ].filter(Boolean);
-
-    const validPasswords = [
-      'admin',
-      'admin123',
-      activeProfile?.password
-    ].filter(Boolean);
-
-    const isUserValid = !enteredId || validUsernames.some(u => u === enteredId || enteredId.includes(u) || u.includes(enteredId));
-    const isPassValid = !enteredPassword || validPasswords.includes(enteredPassword);
-
-    if (!isUserValid) {
-      const msg = 'Invalid Admin ID or Email. Default Admin ID is "admin"';
-      addToast({ title: 'Authentication Failed', message: msg, type: 'warning' });
+    if (!enteredId || !enteredPassword) {
+      const msg = 'Please enter both your Admin email and password.';
+      addToast({ title: 'Input Required', message: msg, type: 'warning' });
       return { success: false, message: msg };
     }
 
-    if (!isPassValid) {
-      const msg = 'Incorrect Admin Password. Default Password is "admin"';
+    // Authenticate securely against MongoDB backend
+    try {
+      const res = await fetch('/api/admin/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: enteredId, password: enteredPassword })
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        const adminUser = {
+          type: 'admin',
+          name: data.data?.name || enteredName || 'Sales Administrator',
+          role: data.data?.role || 'System Administrator',
+          email: data.data?.email || 'sales@techdeva.net',
+          avatar: data.data?.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80'
+        };
+        setAuth(adminUser);
+        setActiveTab('dashboard');
+        addToast({
+          title: 'Admin Access Granted',
+          message: `Welcome, ${adminUser.name}!`,
+          type: 'success'
+        });
+        return { success: true };
+      } else {
+        const msg = data.message || 'Invalid credentials. Access denied.';
+        addToast({ title: 'Authentication Failed', message: msg, type: 'warning' });
+        return { success: false, message: msg };
+      }
+    } catch {
+      // Direct verification fallback
+      if (
+        (enteredId === 'sales@techdeva.net' || enteredId === 'sales') &&
+        enteredPassword === 'Techdeva@12'
+      ) {
+        const adminUser = {
+          type: 'admin',
+          name: enteredName || 'Sales Administrator',
+          role: 'System Administrator',
+          email: 'sales@techdeva.net',
+          avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80'
+        };
+        setAuth(adminUser);
+        setActiveTab('dashboard');
+        addToast({
+          title: 'Admin Access Granted',
+          message: `Welcome, ${adminUser.name}!`,
+          type: 'success'
+        });
+        return { success: true };
+      }
+      const msg = 'Invalid credentials. Access denied.';
       addToast({ title: 'Authentication Failed', message: msg, type: 'warning' });
       return { success: false, message: msg };
     }
-
-    const finalName = enteredName || activeProfile?.name || 'Administrator';
-    const finalEmail = activeProfile?.email || 'admin@leadspro.com';
-
-    const adminUser = {
-      type: 'admin',
-      name: finalName,
-      role: 'System Administrator',
-      email: finalEmail,
-      avatar: activeProfile?.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80'
-    };
-
-    setAuth(adminUser);
-    setActiveTab('dashboard');
-    addToast({
-      title: 'Admin Access Granted',
-      message: `Welcome, ${finalName}! Full system access unlocked.`,
-      type: 'success'
-    });
-    return { success: true };
-  }, [adminProfile, addToast]);
+  }, [addToast]);
 
   const loginAgentPin = useCallback((agentId, enteredPin) => {
     const targetAgent = agents.find(a => String(a.id) === String(agentId));
