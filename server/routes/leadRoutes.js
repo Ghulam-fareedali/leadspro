@@ -78,4 +78,26 @@ router.delete('/', async (req, res) => {
   }
 });
 
+// PUT update single lead category
+router.put('/:id/category', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { category } = req.body;
+    const newCategory = (category || 'General Business').trim();
+
+    const updated = await Lead.findOneAndUpdate(
+      { id },
+      { $set: { category: newCategory } },
+      { new: true }
+    );
+    if (!updated) {
+      return res.status(404).json({ success: false, error: 'Lead not found in MongoDB' });
+    }
+
+    res.json({ success: true, message: 'Category updated in MongoDB', data: updated });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 export default router;

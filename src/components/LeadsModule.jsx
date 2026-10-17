@@ -3,6 +3,7 @@ import * as XLSX from 'xlsx';
 import { useCrm } from '../context/CrmContext';
 import { StatusBadge, SourceBadge } from './StatusBadge';
 import { formatWhatsAppUrl, formatTelUrl, WhatsAppIcon } from '../utils/phoneUtils';
+import { BUSINESS_CATEGORIES, getCategoryConfig, CategoryBadge } from '../utils/categoryUtils';
 import { 
   PhoneForwarded, 
   Phone, 
@@ -15,7 +16,10 @@ import {
   FileText,
   Calendar,
   User,
-  Sparkles
+  Sparkles,
+  Briefcase,
+  Clock,
+  Filter
 } from 'lucide-react';
 
 export const LeadsModule = ({ searchQuery, setSearchQuery }) => {
@@ -23,6 +27,7 @@ export const LeadsModule = ({ searchQuery, setSearchQuery }) => {
     leads, 
     agents, 
     updateLeadStatus, 
+    updateLeadCategory,
     deleteLead, 
     setActiveTab, 
     auth, 
@@ -30,6 +35,7 @@ export const LeadsModule = ({ searchQuery, setSearchQuery }) => {
   } = useCrm();
 
   const isAgent = auth?.type === 'agent';
+  const [selectedCategory, setSelectedCategory] = useState('ALL');
   const [activeStatusTab, setActiveStatusTab] = useState('ALL');
   const [agentFilter, setAgentFilter] = useState('ALL');
   const [activeNoteLeadId, setActiveNoteLeadId] = useState(null);
@@ -40,64 +46,112 @@ export const LeadsModule = ({ searchQuery, setSearchQuery }) => {
     return isAgent ? leads.filter(l => l.assignedAgent === auth?.name) : leads;
   }, [leads, isAgent, auth]);
 
+  // Compute dynamic category pills based on uploaded data in the pipeline
+  const categoryPills = useMemo(() => {
+    const counts = {};
+    scopedLeads.forEach(l => {
+      const cat = l.category || 'General Business';
+      counts[cat] = (counts[cat] || 0) + 1;
+    });
+
+    // Match with predefined business categories
+    const list = BUSINESS_CATEGORIES.filter(c => (counts[c.id] || 0) > 0).map(c => ({
+      ...c,
+      count: counts[c.id] || 0
+    }));
+
+    // Append any extra/custom categories from Excel
+    Object.keys(counts).forEach(catName => {
+      if (!BUSINESS_CATEGORIES.some(c => c.id === catName)) {
+        list.push({
+          id: catName,
+          label: catName,
+          shortLabel: catName,
+          icon: Briefcase,
+          timings: 'Standard Hours',
+          timingHint: 'General Business',
+          badgeClass: 'bg-slate-100 text-slate-800 border-slate-200',
+          activeClass: 'bg-slate-800 text-white border-slate-800',
+          dotClass: 'bg-slate-500',
+          count: counts[catName]
+        });
+      }
+    });
+
+    return list;
+  }, [scopedLeads]);
+
   const filteredLeads = useMemo(() => {
     return scopedLeads.filter(lead => {
+      const leadCat = lead.category || 'General Business';
+      
+      // 1. Category Filter
+      if (selectedCategory !== 'ALL' && leadCat !== selectedCategory) {
+        return false;
+      }
+
+      // 2. Status Filter
+      if (activeStatusTab !== 'ALL' && lead.status !== activeStatusTab) {
+        return false;
+      }
+
+      // 3. Agent Filter
+      if (!isAgent && agentFilter !== 'ALL' && lead.assignedAgent !== agentFilter) {
+        return false;
+      }
+
+      // 4. Search Filter
       const matchesSearch = !searchQuery ||
         lead.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
         lead.phone?.includes(searchQuery) ||
         lead.id?.toLowerCase().includes(searchQuery.toLowerCase()) ||
         lead.email?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        leadCat.toLowerCase().includes(searchQuery.toLowerCase()) ||
         lead.assignedAgent?.toLowerCase().includes(searchQuery.toLowerCase());
 
-      if (!matchesSearch) return false;
-
-      if (activeStatusTab !== 'ALL' && lead.status !== activeStatusTab) return false;
-
-      if (!isAgent && agentFilter !== 'ALL' && lead.assignedAgent !== agentFilter) return false;
-
-      return true;
+      return matchesSearch;
     });
-  }, [scopedLeads, searchQuery, activeStatusTab, agentFilter, isAgent]);
+  }, [scopedLeads, searchQuery, selectedCategory, activeStatusTab, agentFilter, isAgent]);
 
   const statusTabs = [
     {
       id: 'ALL',
       label: isAgent ? 'My Leads' : 'All Leads',
-      count: scopedLeads.length,
+      count: scopedLeads.filter(l => selectedCategory === 'ALL' || (l.category || 'General Business') === selectedCategory).length,
       badgeClass: 'bg-slate-200 text-slate-700'
     },
     {
       id: 'Pending',
       label: 'Pending',
-      count: scopedLeads.filter(l => l.status === 'Pending').length,
+      count: scopedLeads.filter(l => l.status === 'Pending' && (selectedCategory === 'ALL' || (l.category || 'General Business') === selectedCategory)).length,
       badgeClass: 'bg-amber-100 text-amber-800 font-bold',
       desc: 'Awaiting outreach'
     },
     {
       id: 'Connected',
       label: 'Connected',
-      count: scopedLeads.filter(l => l.status === 'Connected').length,
+      count: scopedLeads.filter(l => l.status === 'Connected' && (selectedCategory === 'ALL' || (l.category || 'General Business') === selectedCategory)).length,
       badgeClass: 'bg-blue-100 text-blue-800 font-bold',
       desc: 'In discussions'
     },
     {
       id: 'Interested',
       label: 'Interested (Hot)',
-      count: scopedLeads.filter(l => l.status === 'Interested').length,
+      count: scopedLeads.filter(l => l.status === 'Interested' && (selectedCategory === 'ALL' || (l.category || 'General Business') === selectedCategory)).length,
       badgeClass: 'bg-emerald-100 text-emerald-800 font-bold',
       desc: 'Ready to convert'
     },
     {
       id: 'Not Interested',
       label: 'Not Interested',
-      count: scopedLeads.filter(l => l.status === 'Not Interested').length,
+      count: scopedLeads.filter(l => l.status === 'Not Interested' && (selectedCategory === 'ALL' || (l.category || 'General Business') === selectedCategory)).length,
       badgeClass: 'bg-rose-100 text-rose-800 font-bold',
       desc: 'Dead leads'
     },
     {
       id: 'Not on WhatsApp',
       label: '📵 Not on WhatsApp',
-      count: scopedLeads.filter(l => l.status === 'Not on WhatsApp').length,
+      count: scopedLeads.filter(l => l.status === 'Not on WhatsApp' && (selectedCategory === 'ALL' || (l.category || 'General Business') === selectedCategory)).length,
       badgeClass: 'bg-slate-200 text-slate-800 font-bold',
       desc: 'Numbers not registered on WhatsApp'
     }
@@ -109,6 +163,8 @@ export const LeadsModule = ({ searchQuery, setSearchQuery }) => {
       "Lead ID": l.id,
       "Customer Reference": l.customerId,
       "Lead / Company Name": l.name,
+      "Business Category": l.category || "General Business",
+      "Calling Timings": getCategoryConfig(l.category).timings,
       "Phone Number": l.phone,
       "Email Address": l.email,
       "Assigned Agent": l.assignedAgent,
@@ -122,7 +178,7 @@ export const LeadsModule = ({ searchQuery, setSearchQuery }) => {
     const worksheet = XLSX.utils.json_to_sheet(exportRows);
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, "Leads_Pipeline");
-    XLSX.writeFile(workbook, `OmniFlow_Leads_Report_${new Date().toISOString().split('T')[0]}.xlsx`);
+    XLSX.writeFile(workbook, `OmniFlow_Leads_${selectedCategory === 'ALL' ? 'All' : selectedCategory}_${new Date().toISOString().split('T')[0]}.xlsx`);
 
     addToast({
       title: 'Excel Export Complete',
@@ -155,11 +211,11 @@ export const LeadsModule = ({ searchQuery, setSearchQuery }) => {
               {isAgent ? 'My Assigned Leads' : 'Leads Pipeline'}
             </h1>
             <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200">
-              {scopedLeads.length} Leads
+              {filteredLeads.length} Leads
             </span>
           </div>
           <p className="text-xs text-slate-500 mt-0.5">
-            Click any phone number to open WhatsApp call/chat instantly. 1-tap status updates for sales teams.
+            Select a business category to target leads during their peak calling hours. Click phone to open WhatsApp.
           </p>
         </div>
 
@@ -185,7 +241,81 @@ export const LeadsModule = ({ searchQuery, setSearchQuery }) => {
         </div>
       </div>
 
-      {/* 2. QUICK-FILTER TABS (Horizontally scrollable on mobile) */}
+      {/* 2. BUSINESS CATEGORIES SELECTOR (Filter by business working hours & industry) */}
+      <div className="bg-white p-3 sm:p-4 rounded-xl border border-slate-200 shadow-xs space-y-2.5">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-extrabold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+              <Briefcase className="w-3.5 h-3.5 text-blue-600" />
+              <span>Business Category Filter (Timings):</span>
+            </span>
+            {selectedCategory !== 'ALL' && (
+              <button
+                onClick={() => setSelectedCategory('ALL')}
+                className="text-[11px] font-bold text-blue-600 hover:underline cursor-pointer"
+              >
+                Reset to All
+              </button>
+            )}
+          </div>
+          <span className="text-[11px] text-slate-400 font-medium hidden sm:inline">
+            Target businesses during their optimal operational shift
+          </span>
+        </div>
+
+        {/* Horizontally scrollable category buttons */}
+        <div className="overflow-x-auto pb-1 flex items-center gap-2 -mx-1 px-1">
+          {/* All Categories Button */}
+          <button
+            onClick={() => setSelectedCategory('ALL')}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 cursor-pointer flex items-center gap-1.5 ${
+              selectedCategory === 'ALL'
+                ? 'bg-slate-900 text-white shadow-xs'
+                : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+            }`}
+          >
+            <span>All Categories</span>
+            <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-extrabold ${
+              selectedCategory === 'ALL' ? 'bg-white/20 text-white' : 'bg-white text-slate-700'
+            }`}>
+              {scopedLeads.length}
+            </span>
+          </button>
+
+          {/* Individual Category Buttons */}
+          {categoryPills.map(cat => {
+            const isActive = selectedCategory === cat.id;
+            const Icon = cat.icon || Briefcase;
+            return (
+              <button
+                key={cat.id}
+                onClick={() => setSelectedCategory(cat.id)}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 cursor-pointer flex items-center gap-1.5 ${
+                  isActive
+                    ? `${cat.activeClass || 'bg-blue-600 text-white'} shadow-xs`
+                    : 'bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-700'
+                }`}
+                title={`${cat.label} - Optimal Calling Hours: ${cat.timings}`}
+              >
+                <Icon className="w-3.5 h-3.5 shrink-0" />
+                <span>{cat.shortLabel || cat.label}</span>
+                <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-extrabold ${
+                  isActive ? 'bg-white/25 text-white' : 'bg-slate-200/80 text-slate-800'
+                }`}>
+                  {cat.count}
+                </span>
+                <span className={`text-[9px] px-1.5 py-0.2 rounded font-mono hidden md:inline ${
+                  isActive ? 'bg-black/20 text-white' : 'text-slate-400 bg-slate-100'
+                }`}>
+                  ⏰ {cat.timings}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* 3. STATUS TABS (Horizontally scrollable on mobile) */}
       <div className="bg-white p-3 sm:p-4 rounded-xl border border-slate-200 shadow-xs space-y-3">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div className="overflow-x-auto pb-1 sm:pb-0 flex items-center gap-1.5 shrink-0 -mx-1 px-1">
@@ -239,14 +369,14 @@ export const LeadsModule = ({ searchQuery, setSearchQuery }) => {
         </div>
       </div>
 
-      {/* 3. MOBILE VIEW: 1-TAP TOUCH CARDS (Shown on phones & small screens) */}
+      {/* 4. MOBILE VIEW: 1-TAP TOUCH CARDS (Shown on phones & small screens) */}
       <div className="block md:hidden space-y-3">
         {filteredLeads.length === 0 ? (
           <div className="bg-white rounded-xl border border-slate-200 p-8 text-center text-slate-400">
             <PhoneForwarded className="w-8 h-8 mx-auto mb-2 opacity-40 text-blue-600" />
             <p className="font-semibold text-slate-700 text-sm">No leads in this filter</p>
             <p className="text-xs text-slate-400 mt-1">
-              Change status tabs or clear search query to view leads.
+              Try selecting "All Categories" or clearing the status filter.
             </p>
           </div>
         ) : (
@@ -254,6 +384,7 @@ export const LeadsModule = ({ searchQuery, setSearchQuery }) => {
             const waUrl = formatWhatsAppUrl(lead.phone);
             const telUrl = formatTelUrl(lead.phone);
             const isEditingNote = activeNoteLeadId === lead.id;
+            const catConfig = getCategoryConfig(lead.category);
 
             return (
               <div 
@@ -263,28 +394,41 @@ export const LeadsModule = ({ searchQuery, setSearchQuery }) => {
                     ? 'border-amber-200/80 bg-amber-50/15' 
                     : lead.status === 'Interested'
                     ? 'border-emerald-200/80 bg-emerald-50/10'
+                    : lead.status === 'Not on WhatsApp'
+                    ? 'border-slate-300 bg-slate-50/60 ring-1 ring-slate-400/20'
                     : 'border-slate-200'
                 }`}
               >
-                {/* Header: Name, ID, Source */}
-                <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-1.5 flex-wrap">
-                      <span className="font-extrabold text-slate-900 text-base leading-snug">
-                        {lead.name}
-                      </span>
-                      <span className="font-mono text-[10px] font-bold bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded">
-                        {lead.id}
-                      </span>
+                {/* Header: Name, ID, Category & Timings */}
+                <div className="space-y-1.5">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="font-extrabold text-slate-900 text-base leading-snug">
+                          {lead.name}
+                        </span>
+                        <span className="font-mono text-[10px] font-bold bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded">
+                          {lead.id}
+                        </span>
+                      </div>
+                      {lead.email && (
+                        <p className="text-xs text-slate-400 truncate mt-0.5">
+                          {lead.email}
+                        </p>
+                      )}
                     </div>
-                    {lead.email && (
-                      <p className="text-xs text-slate-400 truncate mt-0.5">
-                        {lead.email}
-                      </p>
-                    )}
-                  </div>
-                  <div className="shrink-0 flex items-center gap-1.5">
+
                     <SourceBadge source={lead.source} />
+                  </div>
+
+                  {/* Category Badge & Shift Timing */}
+                  <div className="flex items-center justify-between gap-2 pt-0.5">
+                    <CategoryBadge category={lead.category} showTimings={true} size="xs" />
+                    
+                    <span className="text-[10px] text-slate-500 font-medium flex items-center gap-1">
+                      <Clock className="w-2.5 h-2.5 text-blue-500" />
+                      <span>{catConfig.timings}</span>
+                    </span>
                   </div>
                 </div>
 
@@ -394,7 +538,7 @@ export const LeadsModule = ({ searchQuery, setSearchQuery }) => {
                         <span className="text-[11px] font-bold text-slate-700">Call Log / Note:</span>
                         <button
                           onClick={() => setActiveNoteLeadId(null)}
-                          className="text-[10px] text-slate-400 hover:text-slate-600"
+                          className="text-[10px] text-slate-400 hover:text-slate-600 cursor-pointer"
                         >
                           Cancel
                         </button>
@@ -408,7 +552,7 @@ export const LeadsModule = ({ searchQuery, setSearchQuery }) => {
                       />
                       <button
                         onClick={() => handleSaveNote(lead.id, lead.status)}
-                        className="w-full py-1.5 bg-blue-600 text-white font-bold text-xs rounded-lg hover:bg-blue-700 transition-colors"
+                        className="w-full py-1.5 bg-blue-600 text-white font-bold text-xs rounded-lg hover:bg-blue-700 transition-colors cursor-pointer"
                       >
                         Save Note to MongoDB
                       </button>
@@ -443,7 +587,7 @@ export const LeadsModule = ({ searchQuery, setSearchQuery }) => {
         )}
       </div>
 
-      {/* 4. DESKTOP VIEW: FULL TABLE (Hidden on mobile phones, shown on md and larger) */}
+      {/* 5. DESKTOP VIEW: FULL TABLE (Hidden on mobile phones, shown on md and larger) */}
       <div className="hidden md:block bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs">
@@ -451,6 +595,7 @@ export const LeadsModule = ({ searchQuery, setSearchQuery }) => {
               <tr className="bg-slate-50/80 border-b border-slate-200 text-slate-500 font-bold uppercase tracking-wider text-[11px]">
                 <th className="py-3.5 px-5">Lead ID</th>
                 <th className="py-3.5 px-5">Lead Name</th>
+                <th className="py-3.5 px-4">Business Category & Timings</th>
                 <th className="py-3.5 px-4">Phone / WhatsApp</th>
                 <th className="py-3.5 px-4">Assigned Agent</th>
                 <th className="py-3.5 px-6 min-w-[220px]">Status (Interactive Dropdown)</th>
@@ -461,13 +606,13 @@ export const LeadsModule = ({ searchQuery, setSearchQuery }) => {
             <tbody className="divide-y divide-slate-100">
               {filteredLeads.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="py-12 text-center text-slate-400">
+                  <td colSpan={8} className="py-12 text-center text-slate-400">
                     <PhoneForwarded className="w-8 h-8 mx-auto mb-2 opacity-40 text-blue-600" />
                     <p className="font-semibold text-slate-600">No leads in this filter</p>
                     <p className="text-xs text-slate-400 mt-0.5">
                       {leads.length === 0
                         ? 'Assign raw customers from the Customers section to build your leads pipeline.'
-                        : 'Try changing the status tabs or clearing the search query.'}
+                        : 'Try changing the category or status tabs, or clearing the search query.'}
                     </p>
                   </td>
                 </tr>
@@ -475,6 +620,7 @@ export const LeadsModule = ({ searchQuery, setSearchQuery }) => {
                 filteredLeads.map((lead) => {
                   const waUrl = formatWhatsAppUrl(lead.phone);
                   const telUrl = formatTelUrl(lead.phone);
+                  const catConfig = getCategoryConfig(lead.category);
 
                   return (
                     <tr
@@ -502,6 +648,17 @@ export const LeadsModule = ({ searchQuery, setSearchQuery }) => {
                           <p className="text-[11px] text-slate-400 truncate max-w-xs">
                             {lead.email || 'No email registered'}
                           </p>
+                        </div>
+                      </td>
+
+                      {/* Business Category & Timings */}
+                      <td className="py-3.5 px-4">
+                        <div className="space-y-1">
+                          <CategoryBadge category={lead.category} showTimings={true} size="xs" />
+                          <div className="flex items-center gap-1 text-[10px] text-slate-400">
+                            <Clock className="w-3 h-3 text-blue-500" />
+                            <span>{catConfig.timings}</span>
+                          </div>
                         </div>
                       </td>
 

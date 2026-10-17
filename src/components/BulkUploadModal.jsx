@@ -1,6 +1,7 @@
 import React, { useState, useRef } from 'react';
 import * as XLSX from 'xlsx';
 import { useCrm } from '../context/CrmContext';
+import { BUSINESS_CATEGORIES, detectCategory } from '../utils/categoryUtils';
 import { 
   X, 
   Upload, 
@@ -14,7 +15,8 @@ import {
   Sparkles,
   RefreshCw,
   SlidersHorizontal,
-  ChevronRight
+  ChevronRight,
+  Briefcase
 } from 'lucide-react';
 
 export const BulkUploadModal = ({ isOpen, onClose, onFinishGoToCustomers }) => {
@@ -29,8 +31,10 @@ export const BulkUploadModal = ({ isOpen, onClose, onFinishGoToCustomers }) => {
     phone: '',
     email: '',
     city: '',
-    source: ''
+    source: '',
+    category: ''
   });
+  const [batchCategory, setBatchCategory] = useState('AUTO'); // 'AUTO' or specific category id
   const [isProcessing, setIsProcessing] = useState(false);
   const [importSuccess, setImportSuccess] = useState(false);
   const [importedCount, setImportedCount] = useState(0);
@@ -45,7 +49,8 @@ export const BulkUploadModal = ({ isOpen, onClose, onFinishGoToCustomers }) => {
       phone: '',
       email: '',
       city: '',
-      source: ''
+      source: '',
+      category: ''
     };
 
     headers.forEach(h => {
@@ -60,6 +65,8 @@ export const BulkUploadModal = ({ isOpen, onClose, onFinishGoToCustomers }) => {
         mapping.city = h;
       } else if (!mapping.source && /source|channel|origin|lead_source|campaign/i.test(lower)) {
         mapping.source = h;
+      } else if (!mapping.category && /category|industry|type|business_type|sector|niche|tag/i.test(lower)) {
+        mapping.category = h;
       }
     });
 
@@ -160,10 +167,17 @@ export const BulkUploadModal = ({ isOpen, onClose, onFinishGoToCustomers }) => {
     }
 
     const formattedRecords = fileData.rawRows.map(row => {
+      const name = String(row[columnMapping.name] || 'Unnamed Customer').trim();
+      const colCategory = columnMapping.category && row[columnMapping.category]
+        ? String(row[columnMapping.category]).trim()
+        : '';
+      const finalCategory = colCategory || (batchCategory !== 'AUTO' ? batchCategory : detectCategory(name));
+
       return {
-        name: String(row[columnMapping.name] || 'Unnamed Customer').trim(),
+        name,
         phone: columnMapping.phone ? String(row[columnMapping.phone] || '').trim() : '0300-0000000',
         email: columnMapping.email ? String(row[columnMapping.email] || '').trim() : '',
+        category: finalCategory,
         city: columnMapping.city ? String(row[columnMapping.city] || 'Karachi').trim() : 'Karachi',
         source: columnMapping.source && row[columnMapping.source] 
           ? String(row[columnMapping.source]).trim() 
@@ -462,6 +476,42 @@ export const BulkUploadModal = ({ isOpen, onClose, onFinishGoToCustomers }) => {
                           ))}
                         </select>
                       </div>
+
+                      {/* Category Column (Optional) */}
+                      <div>
+                        <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+                          Category Column (Optional)
+                        </label>
+                        <select
+                          value={columnMapping.category}
+                          onChange={(e) => setColumnMapping({ ...columnMapping, category: e.target.value })}
+                          className="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-semibold text-slate-800 focus:ring-2 focus:ring-blue-500/20"
+                        >
+                          <option value="">-- Auto-Detect / Use Batch --</option>
+                          {fileData.headers.map(h => (
+                            <option key={h} value={h}>{h}</option>
+                          ))}
+                        </select>
+                      </div>
+
+                      {/* Batch Category Preset / Override */}
+                      <div>
+                        <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+                          Business Category for Batch
+                        </label>
+                        <select
+                          value={batchCategory}
+                          onChange={(e) => setBatchCategory(e.target.value)}
+                          className="w-full px-2.5 py-1.5 bg-blue-50 border border-blue-200 rounded-lg text-xs font-bold text-blue-900 focus:ring-2 focus:ring-blue-500/20"
+                        >
+                          <option value="AUTO">✨ Auto-Detect from Name</option>
+                          {BUSINESS_CATEGORIES.map(cat => (
+                            <option key={cat.id} value={cat.id}>
+                              {cat.label} ({cat.timings})
+                            </option>
+                          ))}
+                        </select>
+                      </div>
                     </div>
                   </div>
 
@@ -483,29 +533,39 @@ export const BulkUploadModal = ({ isOpen, onClose, onFinishGoToCustomers }) => {
                           <tr className="bg-slate-100 text-slate-600 font-bold border-b border-slate-200">
                             <th className="py-2 px-3">#</th>
                             <th className="py-2 px-3 font-semibold text-blue-700">Name ({columnMapping.name || '?'})</th>
+                            <th className="py-2 px-3">Category</th>
                             <th className="py-2 px-3">Phone ({columnMapping.phone || '—'})</th>
-                            <th className="py-2 px-3">Email ({columnMapping.email || '—'})</th>
                             <th className="py-2 px-3">City ({columnMapping.city || '—'})</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100 bg-white">
-                          {fileData.rawRows.slice(0, 5).map((row, idx) => (
-                            <tr key={idx} className="hover:bg-slate-50">
-                              <td className="py-2 px-3 text-slate-400 font-mono">{idx + 1}</td>
-                              <td className="py-2 px-3 font-bold text-slate-800">
-                                {String(row[columnMapping.name] || '—')}
-                              </td>
-                              <td className="py-2 px-3 font-mono text-slate-600">
-                                {columnMapping.phone ? String(row[columnMapping.phone] || '—') : '—'}
-                              </td>
-                              <td className="py-2 px-3 text-slate-500 truncate max-w-xs">
-                                {columnMapping.email ? String(row[columnMapping.email] || '—') : '—'}
-                              </td>
-                              <td className="py-2 px-3 text-slate-500">
-                                {columnMapping.city ? String(row[columnMapping.city] || '—') : '—'}
-                              </td>
-                            </tr>
-                          ))}
+                          {fileData.rawRows.slice(0, 5).map((row, idx) => {
+                            const rowName = String(row[columnMapping.name] || '—');
+                            const colCat = columnMapping.category && row[columnMapping.category] 
+                              ? String(row[columnMapping.category]).trim() 
+                              : '';
+                            const catPreview = colCat || (batchCategory !== 'AUTO' ? batchCategory : detectCategory(rowName));
+
+                            return (
+                              <tr key={idx} className="hover:bg-slate-50">
+                                <td className="py-2 px-3 text-slate-400 font-mono">{idx + 1}</td>
+                                <td className="py-2 px-3 font-bold text-slate-800">
+                                  {rowName}
+                                </td>
+                                <td className="py-2 px-3">
+                                  <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-slate-100 text-slate-700 border border-slate-200">
+                                    {catPreview}
+                                  </span>
+                                </td>
+                                <td className="py-2 px-3 font-mono text-slate-600">
+                                  {columnMapping.phone ? String(row[columnMapping.phone] || '—') : '—'}
+                                </td>
+                                <td className="py-2 px-3 text-slate-500">
+                                  {columnMapping.city ? String(row[columnMapping.city] || '—') : '—'}
+                                </td>
+                              </tr>
+                            );
+                          })}
                         </tbody>
                       </table>
                     </div>

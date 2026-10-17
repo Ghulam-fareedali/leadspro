@@ -301,6 +301,47 @@ export const CrmProvider = ({ children }) => {
     }
   }, [addToast]);
 
+  // 3b. UPDATE LEAD CATEGORY strictly in MongoDB
+  const updateLeadCategory = useCallback(async (leadId, newCategory) => {
+    setLeads(prev => prev.map(l => l.id === leadId ? { ...l, category: newCategory } : l));
+    try {
+      const res = await fetch(`/api/leads/${leadId}/category`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ category: newCategory })
+      });
+      if (!res.ok) throw new Error('Category update failed');
+      addToast({
+        title: 'Category Updated',
+        message: `Lead updated to "${newCategory}".`,
+        type: 'info'
+      });
+    } catch (err) {
+      console.error('Lead category update error:', err);
+    }
+  }, [addToast]);
+
+  // 3c. UPDATE CUSTOMER CATEGORY strictly in MongoDB
+  const updateCustomerCategory = useCallback(async (customerId, newCategory) => {
+    setCustomers(prev => prev.map(c => c.id === customerId ? { ...c, category: newCategory } : c));
+    setLeads(prev => prev.map(l => l.customerId === customerId ? { ...l, category: newCategory } : l));
+    try {
+      const res = await fetch(`/api/customers/${customerId}/category`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ category: newCategory })
+      });
+      if (!res.ok) throw new Error('Customer category update failed');
+      addToast({
+        title: 'Category Updated',
+        message: `Customer updated to "${newCategory}".`,
+        type: 'info'
+      });
+    } catch (err) {
+      console.error('Customer category update error:', err);
+    }
+  }, [addToast]);
+
   // 4. ADD SINGLE CUSTOMER MANUALLY strictly to MongoDB
   const addSingleCustomer = useCallback(async (customerData) => {
     try {
@@ -885,6 +926,8 @@ export const CrmProvider = ({ children }) => {
     bulkUploadCustomers,
     assignCustomersToAgent,
     updateLeadStatus,
+    updateLeadCategory,
+    updateCustomerCategory,
     addSingleCustomer,
     deleteCustomers,
     deleteAllCustomers,

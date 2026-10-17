@@ -22,7 +22,7 @@ router.get('/', async (req, res) => {
 // POST single customer strictly to MongoDB
 router.post('/', async (req, res) => {
   try {
-    const { name, phone, email, source, city } = req.body;
+    const { name, phone, email, source, city, category } = req.body;
     const today = new Date().toISOString().split('T')[0];
 
     const count = await Customer.countDocuments();
@@ -34,6 +34,7 @@ router.post('/', async (req, res) => {
       phone: phone ? phone.trim() : '0300-0000000',
       email: email ? email.trim() : '',
       source: source || 'Direct Entry',
+      category: category ? category.trim() : 'General Business',
       city: city || 'Karachi',
       importedDate: today,
       isAssigned: false,
@@ -65,6 +66,7 @@ router.post('/bulk', async (req, res) => {
       phone: rec.phone ? rec.phone.trim() : '0300-0000000',
       email: rec.email ? rec.email.trim() : '',
       source: rec.source || 'Excel File Upload',
+      category: rec.category ? rec.category.trim() : 'General Business',
       city: rec.city || 'Karachi',
       importedDate: today,
       isAssigned: false,
@@ -111,7 +113,7 @@ router.post('/assign', async (req, res) => {
     const currentLeadCount = await Lead.countDocuments();
     let leadNum = 2001 + currentLeadCount;
 
-    // 3. Create linked Leads in MongoDB
+    // 3. Create linked Leads in MongoDB with category preservation
     const newLeads = assignedCustomers.map(cust => ({
       id: `LEAD-${leadNum++}`,
       customerId: cust.id,
@@ -119,6 +121,7 @@ router.post('/assign', async (req, res) => {
       phone: cust.phone,
       email: cust.email,
       source: cust.source,
+      category: cust.category || 'General Business',
       assignedAgent: agentName,
       status: 'Pending',
       notes: `Assigned to ${agentName} on ${formattedDate}.`,
@@ -201,6 +204,34 @@ router.delete('/:id', async (req, res) => {
     await Customer.findOneAndDelete({ id });
     await Lead.deleteMany({ customerId: id });
     res.json({ success: true, message: `Customer ${id} and linked leads deleted from MongoDB` });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// PUT update single customer category
+router.put('/:id/category', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { category } = req.body;
+    const newCategory = (category || 'General Business').trim();
+
+    const updated = await Customer.findOneAndUpdate(
+      { id },
+      { $set: { category: newCategory } },
+      { new: true }
+    );
+    if (!updated) {
+      return res.status(404).json({ success: false, error: 'Customer not found' });
+    }
+
+    // Also update any linked lead
+    await Lead.updateMany(
+      { customerId: id },
+      { $set: { category: newCategory } }
+    );
+
+    res.json({ success: true, message: 'Category updated in MongoDB', data: updated });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }

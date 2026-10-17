@@ -29,6 +29,12 @@ const leadSchema = new mongoose.Schema({
     type: String,
     default: 'Excel Bulk Import'
   },
+  category: {
+    type: String,
+    default: 'General Business',
+    trim: true,
+    index: true
+  },
   assignedAgent: {
     type: String,
     required: true,

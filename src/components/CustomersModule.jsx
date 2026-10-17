@@ -3,6 +3,7 @@ import * as XLSX from 'xlsx';
 import { useCrm } from '../context/CrmContext';
 import { AssignmentBadge, SourceBadge } from './StatusBadge';
 import { formatWhatsAppUrl, formatTelUrl, WhatsAppIcon } from '../utils/phoneUtils';
+import { BUSINESS_CATEGORIES, getCategoryConfig, CategoryBadge } from '../utils/categoryUtils';
 import { 
   Upload, 
   UserPlus, 
@@ -25,7 +26,8 @@ import {
   RotateCcw,
   AlertTriangle,
   X,
-  Phone
+  Phone,
+  Clock
 } from 'lucide-react';
 
 export const CustomersModule = ({ onOpenUpload, searchQuery, setSearchQuery }) => {
@@ -36,6 +38,7 @@ export const CustomersModule = ({ onOpenUpload, searchQuery, setSearchQuery }) =
     deleteCustomers,
     deleteAllCustomers,
     unassignCustomers,
+    updateCustomerCategory,
     analytics, 
     setActiveTab,
     addToast
@@ -49,6 +52,8 @@ export const CustomersModule = ({ onOpenUpload, searchQuery, setSearchQuery }) =
   const [statusFilter, setStatusFilter] = useState('ALL');
   // Source filter
   const [sourceFilter, setSourceFilter] = useState('ALL');
+  // Category filter
+  const [selectedCategory, setSelectedCategory] = useState('ALL');
 
   // Confirmation modal state for deletion
   const [deleteModalState, setDeleteModalState] = useState({
@@ -59,6 +64,16 @@ export const CustomersModule = ({ onOpenUpload, searchQuery, setSearchQuery }) =
     assignedCount: 0
   });
 
+  // Calculate counts per business category
+  const categoryCounts = useMemo(() => {
+    const counts = {};
+    customers.forEach(c => {
+      const cat = c.category || 'General Business';
+      counts[cat] = (counts[cat] || 0) + 1;
+    });
+    return counts;
+  }, [customers]);
+
   // Filtered customer list
   const filteredCustomers = useMemo(() => {
     return customers.filter(customer => {
@@ -68,6 +83,7 @@ export const CustomersModule = ({ onOpenUpload, searchQuery, setSearchQuery }) =
         customer.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
         customer.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
         customer.source.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        ((customer.category || '').toLowerCase().includes(searchQuery.toLowerCase())) ||
         (customer.assignedTo && customer.assignedTo.toLowerCase().includes(searchQuery.toLowerCase()));
 
       if (!matchesSearch) return false;
@@ -77,9 +93,14 @@ export const CustomersModule = ({ onOpenUpload, searchQuery, setSearchQuery }) =
 
       if (sourceFilter !== 'ALL' && customer.source !== sourceFilter) return false;
 
+      if (selectedCategory !== 'ALL') {
+        const cat = customer.category || 'General Business';
+        if (cat !== selectedCategory) return false;
+      }
+
       return true;
     });
-  }, [customers, searchQuery, statusFilter, sourceFilter]);
+  }, [customers, searchQuery, statusFilter, sourceFilter, selectedCategory]);
 
   const uniqueSources = useMemo(() => {
     return Array.from(new Set(customers.map(c => c.source)));
@@ -195,6 +216,8 @@ export const CustomersModule = ({ onOpenUpload, searchQuery, setSearchQuery }) =
     const exportRows = filteredCustomers.map(c => ({
       "Customer ID": c.id,
       "Customer / Company Name": c.name,
+      "Business Category": c.category || 'General Business',
+      "Calling Timing": getCategoryConfig(c.category).timing,
       "Phone Number": c.phone,
       "Email Address": c.email,
       "Lead Source": c.source,
@@ -396,6 +419,75 @@ export const CustomersModule = ({ onOpenUpload, searchQuery, setSearchQuery }) =
         </div>
       )}
 
+      {/* 3.5 BUSINESS CATEGORY CALLING TIMINGS FILTER BUTTONS */}
+      <div className="bg-white rounded-2xl border border-slate-200 p-3 sm:p-4 shadow-xs space-y-2.5">
+        <div className="flex items-center justify-between text-xs px-1">
+          <div className="flex items-center gap-2">
+            <div className="w-6 h-6 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center">
+              <Clock className="w-3.5 h-3.5" />
+            </div>
+            <div>
+              <span className="font-extrabold text-slate-800 text-xs">Business Category Filter</span>
+              <span className="text-[11px] text-slate-400 ml-1.5 hidden sm:inline">• Target companies by office & calling hours</span>
+            </div>
+          </div>
+          {selectedCategory !== 'ALL' && (
+            <button
+              onClick={() => setSelectedCategory('ALL')}
+              className="text-[11px] font-bold text-blue-600 hover:text-blue-800 cursor-pointer"
+            >
+              Reset to All ({customers.length})
+            </button>
+          )}
+        </div>
+
+        {/* Scrollable Category Filter Buttons */}
+        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-thin">
+          <button
+            onClick={() => setSelectedCategory('ALL')}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all cursor-pointer flex items-center gap-1.5 ${
+              selectedCategory === 'ALL'
+                ? 'bg-blue-600 text-white shadow-sm shadow-blue-500/25'
+                : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
+            }`}
+          >
+            <span>🏢 All Categories</span>
+            <span className={`px-1.5 py-0.2 rounded-full text-[10px] ${selectedCategory === 'ALL' ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-600'}`}>
+              {customers.length}
+            </span>
+          </button>
+
+          {BUSINESS_CATEGORIES.map(cat => {
+            const count = categoryCounts[cat.id] || 0;
+            const isSelected = selectedCategory === cat.id;
+            return (
+              <button
+                key={cat.id}
+                onClick={() => setSelectedCategory(cat.id)}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all cursor-pointer flex items-center gap-1.5 border ${
+                  isSelected
+                    ? 'bg-blue-600 text-white border-blue-600 shadow-sm shadow-blue-500/25'
+                    : 'bg-white hover:bg-slate-50 text-slate-700 border-slate-200'
+                }`}
+              >
+                <span>{cat.icon}</span>
+                <span>{cat.label}</span>
+                <span className={`px-1.5 py-0.5 rounded-md text-[10px] font-mono ${
+                  isSelected ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-500'
+                }`}>
+                  ⏰ {cat.timing}
+                </span>
+                <span className={`px-1.5 py-0.2 rounded-full text-[10px] ${
+                  isSelected ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-700'
+                }`}>
+                  {count}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
       {/* 4. TABLE CONTROLS & SELECTION SHORTCUTS */}
       <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div className="flex items-center gap-2 flex-wrap text-xs">
@@ -439,7 +531,20 @@ export const CustomersModule = ({ onOpenUpload, searchQuery, setSearchQuery }) =
           )}
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          <select
+            value={selectedCategory}
+            onChange={(e) => setSelectedCategory(e.target.value)}
+            className="px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-medium text-slate-700 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+          >
+            <option value="ALL">All Categories ({customers.length})</option>
+            {BUSINESS_CATEGORIES.map(cat => (
+              <option key={cat.id} value={cat.id}>
+                {cat.icon} {cat.label} ({categoryCounts[cat.id] || 0})
+              </option>
+            ))}
+          </select>
+
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
@@ -509,6 +614,9 @@ export const CustomersModule = ({ onOpenUpload, searchQuery, setSearchQuery }) =
                       <p className="text-[11px] text-slate-400 truncate mt-0.5">
                         {cust.email || 'No email'} {cust.city ? `• ${cust.city}` : ''}
                       </p>
+                      <div className="mt-1">
+                        <CategoryBadge category={cust.category} />
+                      </div>
                     </div>
                   </div>
 
@@ -618,6 +726,7 @@ export const CustomersModule = ({ onOpenUpload, searchQuery, setSearchQuery }) =
                 </th>
                 <th className="py-3.5 px-4">Customer ID</th>
                 <th className="py-3.5 px-5">Customer Name & Email</th>
+                <th className="py-3.5 px-4">Category & Hours</th>
                 <th className="py-3.5 px-4">Phone / WhatsApp</th>
                 <th className="py-3.5 px-4">Source</th>
                 <th className="py-3.5 px-5">Assignment Status</th>
@@ -627,11 +736,11 @@ export const CustomersModule = ({ onOpenUpload, searchQuery, setSearchQuery }) =
             <tbody className="divide-y divide-slate-100">
               {filteredCustomers.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="py-16 text-center text-slate-400">
+                  <td colSpan={8} className="py-16 text-center text-slate-400">
                     <Database className="w-10 h-10 mx-auto mb-3 opacity-30 text-blue-600" />
                     <p className="font-bold text-slate-700 text-sm">No customers in pool</p>
                     <p className="text-xs text-slate-400 mt-1 max-w-sm mx-auto">
-                      All test records have been cleared. Upload your Excel/CSV spreadsheet or add your first customer to get started.
+                      All test records have been cleared. Upload your Excel/CSV spreadsheet to get started.
                     </p>
                     <div className="mt-4 flex items-center justify-center gap-3">
                       <button
@@ -640,13 +749,6 @@ export const CustomersModule = ({ onOpenUpload, searchQuery, setSearchQuery }) =
                       >
                         <Upload className="w-4 h-4" />
                         <span>Upload Excel (.xlsx / .csv)</span>
-                      </button>
-                      <button
-                        onClick={() => setIsAddModalOpen(true)}
-                        className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition-all inline-flex items-center gap-1.5 cursor-pointer"
-                      >
-                        <UserPlus className="w-4 h-4" />
-                        <span>Add Single Customer</span>
                       </button>
                     </div>
                   </td>
@@ -686,6 +788,10 @@ export const CustomersModule = ({ onOpenUpload, searchQuery, setSearchQuery }) =
                             {cust.email || 'No email'} • <span className="text-slate-500">{cust.city}</span>
                           </p>
                         </div>
+                      </td>
+
+                      <td className="py-3.5 px-4">
+                        <CategoryBadge category={cust.category} />
                       </td>
 
                       {/* Phone with WhatsApp & Call Action */}

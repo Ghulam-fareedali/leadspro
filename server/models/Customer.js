@@ -24,6 +24,12 @@ const customerSchema = new mongoose.Schema({
     type: String,
     default: 'Excel Bulk Import'
   },
+  category: {
+    type: String,
+    default: 'General Business',
+    trim: true,
+    index: true
+  },
   city: {
     type: String,
     default: 'Karachi'
