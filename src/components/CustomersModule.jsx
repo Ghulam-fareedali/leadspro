@@ -225,96 +225,92 @@ export const CustomersModule = ({ onOpenUpload, searchQuery, setSearchQuery }) =
   }, [customers, selectedIds]);
 
   return (
-    <div className="space-y-6">
-      {/* 1. BULK UPLOAD CALLOUT AREA & HEADER */}
-      <div className="bg-gradient-to-r from-slate-900 via-slate-800 to-blue-950 text-white p-6 rounded-2xl shadow-sm border border-slate-700/50 flex flex-col lg:flex-row lg:items-center justify-between gap-6 relative overflow-hidden">
-        <div className="relative z-10 space-y-1.5 max-w-xl">
-          <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-blue-500/20 text-blue-300 text-xs font-semibold border border-blue-400/30">
-            <Database className="w-3.5 h-3.5 text-blue-400" />
-            <span>Module 1: The Raw Data Pool</span>
-          </div>
-          <h1 className="text-2xl lg:text-3xl font-extrabold tracking-tight text-white">
-            Customer Ingestion & Dispatch
+    <div className="space-y-4 sm:space-y-6">
+      {/* 1. CLEAN MODERN HEADER */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-1">
+        <div>
+          <h1 className="text-xl sm:text-2xl font-extrabold text-slate-900 tracking-tight">
+            Customers Pool
           </h1>
-          <p className="text-xs lg:text-sm text-slate-300 leading-relaxed">
-            Upload your Excel/CSV spreadsheets, select multiple customer records, assign them to agents, or remove unneeded records directly from the database.
+          <p className="text-xs text-slate-500 mt-0.5">
+            Import Excel/CSV spreadsheets, allocate leads to agents, or clean database.
           </p>
         </div>
 
         {/* Action Buttons: Upload & Export */}
-        <div className="relative z-10 flex flex-col sm:flex-row items-stretch sm:items-center gap-3 shrink-0">
+        <div className="flex items-center gap-2 self-start sm:self-auto shrink-0">
           <button
             onClick={onOpenUpload}
-            className="px-5 py-3 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold shadow-lg shadow-blue-600/30 hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center justify-center gap-2 cursor-pointer border border-blue-400/30"
+            className="px-3.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shadow-sm shadow-blue-500/25 transition-all flex items-center gap-1.5 cursor-pointer"
           >
             <Upload className="w-4 h-4" />
-            <span>Upload Your Excel/CSV</span>
+            <span>Upload Spreadsheet</span>
           </button>
 
           <button
             onClick={handleExportExcel}
-            className="px-4 py-3 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-bold border border-white/20 transition-all flex items-center justify-center gap-2"
-            title="Download current customer list as .xlsx Excel file"
+            className="px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer"
+            title="Download current customer list as .xlsx"
           >
-            <Download className="w-4 h-4 text-emerald-400" />
-            <span>Export .xlsx</span>
+            <Download className="w-4 h-4 text-emerald-600" />
+            <span className="hidden sm:inline">Export</span>
           </button>
         </div>
       </div>
 
-      {/* 2. STATS PILLS & QUICK FILTERS */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      {/* 2. STATS PILLS & QUICK FILTERS (3-column responsive) */}
+      <div className="grid grid-cols-3 gap-2 sm:gap-4">
         <div 
           onClick={() => setStatusFilter('ALL')}
-          className={`p-4 rounded-xl border bg-white shadow-xs cursor-pointer transition-all ${
+          className={`p-3 sm:p-4 rounded-xl border bg-white shadow-xs cursor-pointer transition-all ${
             statusFilter === 'ALL' ? 'border-blue-500 ring-2 ring-blue-500/10' : 'border-slate-200 hover:border-slate-300'
           }`}
         >
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">
-              Total Raw Pool
+            <span className="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-slate-500">
+              Total Pool
             </span>
-            <Database className="w-4 h-4 text-slate-400" />
+            <Database className="w-3.5 h-3.5 text-slate-400 hidden sm:block" />
           </div>
-          <div className="mt-2 flex items-baseline gap-2">
-            <span className="text-2xl font-bold text-slate-800">{analytics.totalCustomersPool}</span>
-            <span className="text-xs text-slate-400 font-medium">all imported records</span>
+          <div className="mt-1 sm:mt-2 flex items-baseline gap-1.5">
+            <span className="text-lg sm:text-2xl font-bold text-slate-800">{analytics.totalCustomersPool}</span>
+            <span className="text-[10px] text-slate-400 font-medium hidden md:inline">records</span>
           </div>
         </div>
 
         <div 
           onClick={() => setStatusFilter('UNASSIGNED')}
-          className={`p-4 rounded-xl border bg-white shadow-xs cursor-pointer transition-all ${
+          className={`p-3 sm:p-4 rounded-xl border bg-white shadow-xs cursor-pointer transition-all ${
             statusFilter === 'UNASSIGNED' ? 'border-amber-500 ring-2 ring-amber-500/10' : 'border-slate-200 hover:border-slate-300'
           }`}
         >
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold uppercase tracking-wider text-amber-600">
-              Unassigned Backlog
+            <span className="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-amber-600">
+              Unassigned
             </span>
-            <Inbox className="w-4 h-4 text-amber-500" />
+            <Inbox className="w-3.5 h-3.5 text-amber-500 hidden sm:block" />
           </div>
-          <div className="mt-2 flex items-baseline gap-2">
-            <span className="text-2xl font-bold text-amber-600">{analytics.unassignedCount}</span>
-            <span className="text-xs text-slate-400 font-medium">ready to assign</span>
+          <div className="mt-1 sm:mt-2 flex items-baseline gap-1.5">
+            <span className="text-lg sm:text-2xl font-bold text-amber-600">{analytics.unassignedCount}</span>
+            <span className="text-[10px] text-slate-400 font-medium hidden md:inline">ready</span>
           </div>
         </div>
 
         <div 
           onClick={() => setStatusFilter('ASSIGNED')}
-          className={`p-4 rounded-xl border bg-white shadow-xs cursor-pointer transition-all ${
+          className={`p-3 sm:p-4 rounded-xl border bg-white shadow-xs cursor-pointer transition-all ${
             statusFilter === 'ASSIGNED' ? 'border-emerald-500 ring-2 ring-emerald-500/10' : 'border-slate-200 hover:border-slate-300'
           }`}
         >
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold uppercase tracking-wider text-emerald-600">
-              Assigned (In Leads Pipeline)
+            <span className="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-emerald-600">
+              Assigned
             </span>
-            <UserCheck className="w-4 h-4 text-emerald-500" />
+            <UserCheck className="w-3.5 h-3.5 text-emerald-500 hidden sm:block" />
           </div>
-          <div className="mt-2 flex items-baseline gap-2">
-            <span className="text-2xl font-bold text-emerald-600">{analytics.assignedCustomersCount}</span>
-            <span className="text-xs text-slate-400 font-medium">actively tracked</span>
+          <div className="mt-1 sm:mt-2 flex items-baseline gap-1.5">
+            <span className="text-lg sm:text-2xl font-bold text-emerald-600">{analytics.assignedCustomersCount}</span>
+            <span className="text-[10px] text-slate-400 font-medium hidden md:inline">in pipeline</span>
           </div>
         </div>
       </div>

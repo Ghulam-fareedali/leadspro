@@ -425,21 +425,9 @@ export const LoginScreen = () => {
         </div>
       </main>
 
-      {/* Footer Features Summary */}
-      <footer className="max-w-4xl w-full mx-auto text-center text-[11px] text-slate-400 space-y-1.5 z-10">
-        <div className="flex flex-wrap items-center justify-center gap-4 text-slate-400">
-          <span className="flex items-center gap-1.5">
-            <CheckCircle2 className="w-3.5 h-3.5 text-blue-400" />
-            Admin: Dynamic Profile, Lead Ingestion & Real-time PIN Assignment
-          </span>
-          <span className="flex items-center gap-1.5">
-            <CheckCircle2 className="w-3.5 h-3.5 text-indigo-400" />
-            Team Members: Direct PIN-Protected Access to Assigned Leads
-          </span>
-        </div>
-        <p className="text-slate-400">
-          OmniFlow CRM • Live Production Deployment
-        </p>
+      {/* Clean Minimal Footer */}
+      <footer className="text-center text-[11px] text-slate-500 py-3 z-10">
+        <p>OmniFlow CRM • Secure Cloud Portal</p>
       </footer>
     </div>
   );

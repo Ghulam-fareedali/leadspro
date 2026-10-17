@@ -1,28 +1,16 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useCrm } from '../context/CrmContext';
 import { 
   Search, 
   Upload, 
-  Calendar, 
-  Bell, 
-  Sparkles, 
-  Check, 
-  Layers, 
-  Activity, 
-  HelpCircle,
-  Database,
-  LogOut,
-  KeyRound,
+  RefreshCw,
+  Menu,
   ShieldCheck,
-  Pencil,
-  X,
-  RefreshCw
+  X
 } from 'lucide-react';
 
-export const Header = ({ onOpenUpload, searchQuery, setSearchQuery }) => {
-  const { analytics, customers, leads, activeTab, dbStatus, auth, logout, adminProfile, updateAdminProfile, syncNow } = useCrm();
-  const [showNotifications, setShowNotifications] = useState(false);
-  const notifRef = useRef(null);
+export const Header = ({ onOpenUpload, searchQuery, setSearchQuery, onToggleMobileMenu }) => {
+  const { customers, leads, dbStatus, auth, adminProfile, updateAdminProfile, syncNow } = useCrm();
 
   // Admin Profile Edit Modal State
   const [showAdminModal, setShowAdminModal] = useState(false);
@@ -41,63 +29,45 @@ export const Header = ({ onOpenUpload, searchQuery, setSearchQuery }) => {
     setShowAdminModal(false);
   };
 
-  // Close notifications popover on click outside
-  useEffect(() => {
-    const handleClick = (e) => {
-      if (notifRef.current && !notifRef.current.contains(e.target)) {
-        setShowNotifications(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClick);
-    return () => document.removeEventListener('mousedown', handleClick);
-  }, []);
-
-  const today = new Date();
-  const dateStr = today.toLocaleDateString('en-US', {
-    weekday: 'short',
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric'
-  });
-
   return (
-    <header className="h-16 bg-white border-b border-slate-200 px-6 flex items-center justify-between sticky top-0 z-30 shadow-xs">
-      {/* Global Search */}
-      <div className="flex items-center gap-4 flex-1 max-w-md">
+    <header className="h-16 bg-white border-b border-slate-200 px-3 sm:px-6 flex items-center justify-between sticky top-0 z-30 shadow-xs">
+      {/* Mobile Hamburger & Search */}
+      <div className="flex items-center gap-2 sm:gap-4 flex-1 max-w-md min-w-0">
+        <button
+          type="button"
+          onClick={onToggleMobileMenu}
+          className="p-2 -ml-1 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-xl md:hidden shrink-0 cursor-pointer"
+          title="Open Menu"
+        >
+          <Menu className="w-5 h-5" />
+        </button>
+
         <div className="relative w-full">
-          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
           <input
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder={`Search across ${customers.length} customers & ${leads.length} leads...`}
-            className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 focus:bg-white transition-all"
+            placeholder={`Search ${customers.length + leads.length} records...`}
+            className="w-full pl-9 pr-3 py-1.5 sm:py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 focus:bg-white transition-all"
           />
         </div>
       </div>
 
-      {/* Right Action & Info Area */}
-      <div className="flex items-center gap-3.5">
-        {/* Date Display */}
-        <div className="hidden md:flex items-center gap-2 px-3 py-1.5 bg-slate-50 border border-slate-200/90 rounded-lg text-xs font-semibold text-slate-600">
-          <Calendar className="w-3.5 h-3.5 text-slate-400" />
-          <span>{dateStr}</span>
-        </div>
-
+      {/* Right Actions */}
+      <div className="flex items-center gap-2 sm:gap-3 shrink-0 ml-2">
         {/* Database Status Badge */}
         <div 
-          className={`hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold border transition-all ${
+          className={`flex items-center gap-1.5 px-2 sm:px-2.5 py-1.5 rounded-xl text-xs font-semibold border transition-all ${
             dbStatus?.connected 
               ? 'bg-emerald-50 text-emerald-700 border-emerald-200' 
-              : dbStatus?.mode === 'server-local'
-              ? 'bg-blue-50 text-blue-700 border-blue-200'
-              : 'bg-slate-100 text-slate-600 border-slate-200'
+              : 'bg-amber-50 text-amber-700 border-amber-200'
           }`}
           title={dbStatus?.message || 'Database status'}
         >
           <span className={`w-2 h-2 rounded-full ${dbStatus?.connected ? 'bg-emerald-500 animate-pulse' : 'bg-amber-400'}`} />
-          <span className="text-[11px] font-bold">
-            {dbStatus?.connected ? 'MongoDB Live' : 'Connecting to DB...'}
+          <span className="text-[11px] font-bold hidden sm:inline">
+            {dbStatus?.connected ? 'MongoDB Live' : 'Connecting...'}
           </span>
         </div>
 
@@ -105,130 +75,57 @@ export const Header = ({ onOpenUpload, searchQuery, setSearchQuery }) => {
         <button
           type="button"
           onClick={() => syncNow()}
-          className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-50 hover:bg-emerald-50 text-slate-700 hover:text-emerald-700 border border-slate-200 hover:border-emerald-300 rounded-lg text-xs font-semibold transition-all cursor-pointer shadow-xs active:scale-95"
-          title="Instantly synchronize records from MongoDB database across all devices"
+          className="flex items-center gap-1.5 p-2 sm:px-3 sm:py-1.5 bg-slate-50 hover:bg-emerald-50 text-slate-700 hover:text-emerald-700 border border-slate-200 hover:border-emerald-300 rounded-xl text-xs font-semibold transition-all cursor-pointer shadow-xs active:scale-95"
+          title="Instantly synchronize records from MongoDB"
         >
           <RefreshCw className="w-3.5 h-3.5 text-emerald-600" />
-          <span className="hidden sm:inline">Refresh DB</span>
+          <span className="hidden md:inline">Sync</span>
         </button>
 
         {/* Bulk Upload Button (Admin Only) */}
         {auth?.type === 'admin' && (
           <button
             onClick={onOpenUpload}
-            className="px-3.5 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-lg text-xs font-bold transition-all flex items-center gap-2 shadow-xs hover:border-blue-300 cursor-pointer"
-            title="Upload Excel or CSV data into Customers pool"
+            className="p-2 sm:px-3.5 sm:py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-sm shadow-blue-500/25 cursor-pointer"
+            title="Upload Excel or CSV data"
           >
-            <Upload className="w-3.5 h-3.5 text-blue-600" />
-            <span className="hidden sm:inline">Upload Excel/CSV</span>
+            <Upload className="w-3.5 h-3.5 text-white" />
+            <span className="hidden sm:inline">Upload</span>
           </button>
         )}
-
-        {/* Notifications Popover */}
-        <div className="relative" ref={notifRef}>
-          <button
-            onClick={() => setShowNotifications(!showNotifications)}
-            className="relative p-2 rounded-lg text-slate-500 hover:text-slate-800 hover:bg-slate-100 transition-colors focus:outline-none cursor-pointer"
-            title="Recent Pipeline Activity"
-          >
-            <Bell className="w-5 h-5" />
-            <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-blue-600 rounded-full ring-2 ring-white" />
-          </button>
-
-          {showNotifications && (
-            <div className="absolute right-0 mt-2 w-80 bg-white border border-slate-200 rounded-xl shadow-xl p-3 z-50 animate-in fade-in slide-in-from-top-2 duration-150">
-              <div className="flex items-center justify-between pb-2 border-b border-slate-100 px-1">
-                <div className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-slate-700">
-                  <Activity className="w-3.5 h-3.5 text-blue-600" />
-                  <span>Pipeline Activity Log</span>
-                </div>
-                <span className="text-[10px] bg-blue-50 text-blue-700 font-bold px-2 py-0.5 rounded-full">
-                  Real-time
-                </span>
-              </div>
-
-              <div className="max-h-64 overflow-y-auto divide-y divide-slate-100 my-1 text-xs">
-                <div className="py-2 px-1 hover:bg-slate-50 rounded">
-                  <p className="font-semibold text-slate-800">
-                    {analytics.totalLeadsAssigned} leads in active workflow
-                  </p>
-                  <p className="text-[11px] text-slate-500">
-                    {analytics.interestedCount} marked as <strong>Interested</strong> (Hot Leads)
-                  </p>
-                </div>
-                <div className="py-2 px-1 hover:bg-slate-50 rounded">
-                  <p className="font-semibold text-slate-800">
-                    {analytics.unassignedCount} records in raw pool
-                  </p>
-                  <p className="text-[11px] text-slate-500">
-                    Ready for batch assignment to sales team.
-                  </p>
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
 
         {/* Vertical Separator */}
         <div className="h-6 w-px bg-slate-200" />
 
-        {/* User Profile Chip (Admin or Agent) */}
-        <div className="flex items-center gap-2">
-          <div 
-            onClick={() => {
-              if (auth?.type === 'admin') {
-                setEditName(auth.name || '');
-                setEditEmail(auth.email || '');
-                setEditPassword('');
-                setShowAdminModal(true);
-              }
-            }}
-            className={`flex items-center gap-2.5 p-1 rounded-xl transition-all ${
-              auth?.type === 'admin' 
-                ? 'hover:bg-slate-100 cursor-pointer' 
-                : ''
-            }`}
-            title={auth?.type === 'admin' ? "Click to Edit Admin Profile & Name" : undefined}
-          >
-            {auth?.avatar ? (
-              <img
-                src={auth.avatar}
-                alt={auth.name}
-                className="w-8 h-8 rounded-full object-cover ring-2 ring-blue-500/30"
-              />
-            ) : (
-              <div className="w-8 h-8 rounded-full bg-slate-800 text-white font-bold flex items-center justify-center text-xs shadow-xs">
-                {auth?.name?.substring(0, 2).toUpperCase() || 'AD'}
-              </div>
-            )}
-
-            <div className="hidden lg:block text-left text-xs">
-              <div className="flex items-center gap-1.5">
-                <p className="font-bold text-slate-800 leading-tight">{auth?.name || 'User'}</p>
-                {auth?.type === 'admin' ? (
-                  <span className="text-[9px] px-1.5 py-0.2 rounded bg-blue-100 text-blue-700 font-extrabold uppercase flex items-center gap-0.5">
-                    <span>Admin</span>
-                    <Pencil className="w-2 h-2 opacity-60" />
-                  </span>
-                ) : (
-                  <span className="text-[9px] px-1.5 py-0.2 rounded bg-indigo-100 text-indigo-700 font-extrabold flex items-center gap-0.5" title={`Security PIN: ${auth?.pin}`}>
-                    <KeyRound className="w-2.5 h-2.5" />
-                    <span>PIN: {auth?.pin}</span>
-                  </span>
-                )}
-              </div>
-              <p className="text-[10px] text-slate-400 leading-tight">{auth?.role || 'Team Member'}</p>
+        {/* User Profile Avatar / Chip */}
+        <div 
+          onClick={() => {
+            if (auth?.type === 'admin') {
+              setEditName(auth.name || '');
+              setEditEmail(auth.email || '');
+              setEditPassword('');
+              setShowAdminModal(true);
+            }
+          }}
+          className={`flex items-center gap-2 p-1.5 rounded-xl transition-all ${
+            auth?.type === 'admin' ? 'hover:bg-slate-100 cursor-pointer' : ''
+          }`}
+          title={auth?.type === 'admin' ? "Click to Edit Admin Profile" : undefined}
+        >
+          {auth?.avatar ? (
+            <img
+              src={auth.avatar}
+              alt={auth.name}
+              className="w-8 h-8 rounded-full object-cover ring-2 ring-blue-500/30"
+            />
+          ) : (
+            <div className="w-8 h-8 rounded-full bg-slate-800 text-white font-bold flex items-center justify-center text-xs shadow-xs">
+              {auth?.name?.substring(0, 2).toUpperCase() || 'AD'}
             </div>
-          </div>
-
-          {/* Logout / Switch Portal Button */}
-          <button
-            onClick={logout}
-            className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
-            title="Sign Out / Switch Portal"
-          >
-            <LogOut className="w-4 h-4" />
-          </button>
+          )}
+          <span className="text-xs font-bold text-slate-700 hidden lg:inline max-w-[120px] truncate">
+            {auth?.name}
+          </span>
         </div>
       </div>
 

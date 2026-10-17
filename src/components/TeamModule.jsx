@@ -152,36 +152,31 @@ export const TeamModule = () => {
   };
 
   return (
-    <div className="space-y-6">
-      {/* 1. HEADER */}
-      <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+    <div className="space-y-4 sm:space-y-6">
+      {/* 1. CLEAN HEADER */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-1">
         <div>
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold">
-              <Users2 className="w-4 h-4" />
-            </div>
-            <h1 className="text-xl lg:text-2xl font-bold text-slate-900 tracking-tight">
-              Sales Team Roster & Members
+            <h1 className="text-xl sm:text-2xl font-extrabold text-slate-900 tracking-tight">
+              Team Members & PINs
             </h1>
-            <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
-              {agents.length} Active Representatives
+            <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+              {agents.length} Members
             </span>
           </div>
-          <p className="text-xs text-slate-500 mt-1">
-            Add team members, customize names and designations, or remove agents. New members instantly appear in all lead routing dropdowns.
+          <p className="text-xs text-slate-500 mt-0.5">
+            Manage sales representatives and their private security login PINs.
           </p>
         </div>
 
         {/* Action Button: Add Team Member */}
-        <div className="flex items-center gap-2.5">
-          <button
-            onClick={handleOpenAddModal}
-            className="px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shadow-md shadow-blue-500/25 transition-all flex items-center gap-1.5 cursor-pointer"
-          >
-            <UserPlus className="w-4 h-4" />
-            <span>+ Add Team Member</span>
-          </button>
-        </div>
+        <button
+          onClick={handleOpenAddModal}
+          className="px-3.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shadow-sm shadow-blue-500/25 transition-all flex items-center gap-1.5 self-start sm:self-auto cursor-pointer"
+        >
+          <UserPlus className="w-4 h-4" />
+          <span>+ Add Member</span>
+        </button>
       </div>
 
       {/* 2. AGENTS ROSTER GRID */}

@@ -3,19 +3,14 @@ import { useCrm } from '../context/CrmContext';
 import { 
   LayoutDashboard, 
   Database, 
-  Filter, 
+  PhoneForwarded, 
   Users2, 
-  Layers, 
-  Sparkles, 
-  ShieldCheck, 
-  PhoneForwarded,
   ArrowRightLeft,
-  KeyRound,
   LogOut,
-  UserCheck
+  X
 } from 'lucide-react';
 
-export const Sidebar = () => {
+export const Sidebar = ({ isMobileOpen, onCloseMobile }) => {
   const { activeTab, setActiveTab, analytics, agents, leads, auth, logout } = useCrm();
 
   const isAgent = auth?.type === 'agent';
@@ -26,107 +21,93 @@ export const Sidebar = () => {
       id: 'dashboard',
       label: 'Dashboard',
       icon: LayoutDashboard,
-      badge: null,
-      description: 'Analytics & Pipeline Funnel'
+      badge: null
     },
     {
       id: 'customers',
       label: 'Customers',
       icon: Database,
       badge: analytics.totalCustomersPool,
-      badgeColor: 'bg-slate-200 text-slate-700',
-      description: 'Raw Data Pool & Bulk Import'
+      badgeColor: 'bg-slate-100 text-slate-700'
     },
     {
       id: 'leads',
-      label: 'Leads',
+      label: 'Leads Pipeline',
       icon: PhoneForwarded,
       badge: analytics.totalLeadsAssigned,
-      badgeColor: 'bg-blue-100 text-blue-700 font-bold',
-      description: 'Action Pipeline & Statuses'
+      badgeColor: 'bg-blue-100 text-blue-700 font-bold'
     },
     {
       id: 'team',
       label: 'Team & PINs',
       icon: Users2,
-      badge: `${agents.length} Member${agents.length !== 1 ? 's' : ''}`,
-      badgeColor: 'bg-emerald-100 text-emerald-700 font-bold',
-      description: 'Agent Roster & Security PINs'
+      badge: agents.length,
+      badgeColor: 'bg-emerald-100 text-emerald-700 font-bold'
     }
   ];
 
   const agentNavItems = [
     {
       id: 'leads',
-      label: 'My Leads Pipeline',
+      label: 'My Assigned Leads',
       icon: PhoneForwarded,
-      badge: `${agentLeadsCount} Assigned`,
-      badgeColor: 'bg-indigo-100 text-indigo-700 font-bold',
-      description: 'Your assigned customer leads'
+      badge: agentLeadsCount,
+      badgeColor: 'bg-indigo-100 text-indigo-700 font-bold'
     },
     {
       id: 'dashboard',
       label: 'My Performance',
       icon: LayoutDashboard,
-      badge: null,
-      description: 'Your conversion & call stats'
+      badge: null
     }
   ];
 
   const navItems = isAgent ? agentNavItems : adminNavItems;
 
-  return (
-    <aside className="w-64 h-screen bg-white border-r border-slate-200 flex flex-col justify-between shrink-0 select-none z-20">
-      {/* Top Branding */}
+  const handleSelectTab = (id) => {
+    setActiveTab(id);
+    if (onCloseMobile) onCloseMobile();
+  };
+
+  const sidebarContent = (
+    <div className="h-full flex flex-col justify-between">
+      {/* Top Branding & Navigation */}
       <div>
-        <div className="h-16 flex items-center px-6 border-b border-slate-200 gap-3">
-          <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-blue-600 via-indigo-600 to-blue-500 flex items-center justify-center text-white shadow-md shadow-blue-500/20">
-            <ArrowRightLeft className="w-5 h-5" />
-          </div>
-          <div>
-            <div className="flex items-center gap-1.5">
-              <span className="font-extrabold text-base tracking-tight text-slate-900">OmniFlow</span>
-              {isAgent ? (
-                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-700 uppercase">
-                  AGENT
-                </span>
-              ) : (
-                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 uppercase">
-                  ADMIN
-                </span>
-              )}
+        <div className="h-16 flex items-center justify-between px-5 border-b border-slate-200">
+          <div className="flex items-center gap-2.5">
+            <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-600 flex items-center justify-center text-white shadow-md shadow-blue-500/20">
+              <ArrowRightLeft className="w-5 h-5" />
             </div>
-            <p className="text-[10px] text-slate-400 font-medium">
-              {isAgent ? `${auth?.name} Portal` : 'Customer & Lead Pipeline'}
-            </p>
+            <div>
+              <div className="flex items-center gap-1.5">
+                <span className="font-extrabold text-base tracking-tight text-slate-900">OmniFlow</span>
+                <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded uppercase ${
+                  isAgent ? 'bg-indigo-100 text-indigo-700' : 'bg-blue-100 text-blue-700'
+                }`}>
+                  {isAgent ? 'AGENT' : 'ADMIN'}
+                </span>
+              </div>
+              <p className="text-[10px] text-slate-400 font-medium truncate max-w-[140px]">
+                {auth?.name || 'CRM Portal'}
+              </p>
+            </div>
           </div>
+
+          {/* Close Button on Mobile Drawer */}
+          {onCloseMobile && (
+            <button
+              onClick={onCloseMobile}
+              className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 md:hidden cursor-pointer"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          )}
         </div>
 
-        {/* Workflow Architecture Card */}
-        <div className="px-4 pt-4 pb-2">
-          <div className="p-3 rounded-xl bg-slate-50 border border-slate-200/90 text-xs space-y-1.5">
-            <div className="flex items-center justify-between text-[11px] font-bold text-slate-500 uppercase tracking-wider">
-              <span>Separation Flow</span>
-              <span className="text-blue-600 font-bold">2-Tier</span>
-            </div>
-            <div className="flex items-center justify-between text-xs font-semibold text-slate-700">
-              <span className="flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-slate-400" />
-                Data Pool
-              </span>
-              <span className="text-slate-400">→</span>
-              <span className="flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-blue-600" />
-                Action Pipeline
-              </span>
-            </div>
-          </div>
-        </div>
-
-        {/* Navigation Section */}
-        <div className="px-3 py-3 space-y-1">
-          <p className="px-3 py-1.5 text-[11px] font-bold uppercase tracking-wider text-slate-400">
-            System Modules
+        {/* Navigation Links */}
+        <div className="p-3 space-y-1">
+          <p className="px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-400">
+            Navigation
           </p>
 
           {navItems.map((item) => {
@@ -135,24 +116,20 @@ export const Sidebar = () => {
             return (
               <button
                 key={item.id}
-                onClick={() => setActiveTab(item.id)}
-                className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-all group ${
+                onClick={() => handleSelectTab(item.id)}
+                className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
                   isActive
                     ? 'bg-blue-600 text-white shadow-sm shadow-blue-500/25'
-                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/80'
+                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
                 }`}
               >
                 <div className="flex items-center gap-3">
-                  <Icon
-                    className={`w-4 h-4 transition-transform group-hover:scale-110 ${
-                      isActive ? 'text-white' : 'text-slate-400 group-hover:text-slate-700'
-                    }`}
-                  />
+                  <Icon className={`w-4 h-4 ${isActive ? 'text-white' : 'text-slate-400'}`} />
                   <span>{item.label}</span>
                 </div>
-                {item.badge !== null && (
+                {item.badge !== null && item.badge !== undefined && (
                   <span
-                    className={`text-[10px] px-2 py-0.5 rounded-full font-bold transition-all ${
+                    className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${
                       isActive
                         ? 'bg-white/20 text-white'
                         : item.badgeColor || 'bg-slate-100 text-slate-600'
@@ -167,53 +144,52 @@ export const Sidebar = () => {
         </div>
       </div>
 
-      {/* Bottom Pipeline Progress Card */}
-      <div className="p-4 border-t border-slate-200 space-y-3">
-        <div className="bg-slate-50 border border-slate-200/90 rounded-xl p-3">
-          <div className="flex items-center justify-between text-xs font-bold text-slate-700 mb-1.5">
-            <span>Pool Distributed</span>
-            <span className="text-blue-600 font-extrabold">
-              {analytics.totalCustomersPool > 0
-                ? Math.round((analytics.totalLeadsAssigned / analytics.totalCustomersPool) * 100)
-                : 0}%
-            </span>
+      {/* Bottom User Profile & Sign Out */}
+      <div className="p-3 border-t border-slate-200 space-y-2">
+        <div className="flex items-center gap-2.5 px-2 py-1.5">
+          <div className="w-8 h-8 rounded-full bg-slate-800 text-white text-xs font-bold flex items-center justify-center shrink-0">
+            {auth?.name?.charAt(0) || 'U'}
           </div>
-
-          <div className="w-full bg-slate-200 h-2 rounded-full overflow-hidden">
-            <div
-              className="bg-blue-600 h-full rounded-full transition-all duration-500"
-              style={{
-                width: `${
-                  analytics.totalCustomersPool > 0
-                    ? Math.round((analytics.totalLeadsAssigned / analytics.totalCustomersPool) * 100)
-                    : 0
-                }%`
-              }}
-            />
-          </div>
-
-          <div className="mt-2 flex justify-between text-[11px] text-slate-500 font-medium">
-            <span>{analytics.totalLeadsAssigned} Assigned</span>
-            <span>{analytics.unassignedCount} In Pool</span>
+          <div className="min-w-0 flex-1">
+            <p className="text-xs font-bold text-slate-800 truncate">{auth?.name}</p>
+            <p className="text-[10px] text-slate-400 truncate">{auth?.email || (isAgent ? 'Sales Agent' : 'Admin')}</p>
           </div>
         </div>
 
-        <div className="flex items-center justify-between px-1 text-[11px] text-slate-400">
-          <span>Enterprise v3.2</span>
-          <span className="flex items-center gap-1 text-emerald-600 font-semibold">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" /> Live Sync
-          </span>
-        </div>
-
-        {/* Sign Out Button */}
         <button
           onClick={logout}
           className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-xl border border-slate-200 hover:border-rose-300 hover:bg-rose-50 text-slate-600 hover:text-rose-600 text-xs font-semibold transition-all cursor-pointer"
         >
           <LogOut className="w-3.5 h-3.5" />
-          <span>Exit / Switch Portal</span>
+          <span>Sign Out</span>
         </button>
       </div>
-    </aside>
+    </div>
+  );
+
+  return (
+    <>
+      {/* Desktop Sidebar (hidden on mobile) */}
+      <aside className="hidden md:flex w-60 h-screen bg-white border-r border-slate-200 flex-col shrink-0 select-none z-20">
+        {sidebarContent}
+      </aside>
+
+      {/* Mobile Drawer (visible when isMobileOpen is true) */}
+      {isMobileOpen && (
+        <div className="fixed inset-0 z-50 md:hidden flex">
+          {/* Backdrop */}
+          <div 
+            onClick={onCloseMobile} 
+            className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs animate-in fade-in duration-200"
+          />
+          {/* Drawer content */}
+          <div className="relative w-72 max-w-[80vw] h-full bg-white shadow-2xl z-10 animate-in slide-in-from-left duration-200">
+            {sidebarContent}
+          </div>
+        </div>
+      )}
+    </>
   );
 };
+
+export default Sidebar;

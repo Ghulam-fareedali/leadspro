@@ -129,65 +129,64 @@ export const LeadsModule = ({ searchQuery, setSearchQuery }) => {
   };
 
   return (
-    <div className="space-y-6">
-      {/* 1. SECTION HEADER */}
-      <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+    <div className="space-y-4 sm:space-y-6">
+      {/* 1. CLEAN SECTION HEADER */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-1">
         <div>
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-blue-100 text-blue-700 flex items-center justify-center font-bold">
-              <PhoneForwarded className="w-4 h-4" />
-            </div>
-            <h1 className="text-xl lg:text-2xl font-bold text-slate-900 tracking-tight">
-              Action Pipeline (Assigned Leads)
+            <h1 className="text-xl sm:text-2xl font-extrabold text-slate-900 tracking-tight">
+              {isAgent ? 'My Assigned Leads' : 'Leads Pipeline'}
             </h1>
-            <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200">
-              {leads.length} in Active Pipeline
+            <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200">
+              {scopedLeads.length} Leads
             </span>
           </div>
-          <p className="text-xs text-slate-500 mt-1">
-            Tracks active communications and sales conversions. Records originate from the <strong>Customers</strong> data pool upon agent assignment.
+          <p className="text-xs text-slate-500 mt-0.5">
+            Active customer conversations, call updates, and conversion statuses.
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 self-start sm:self-auto shrink-0">
           <button
             onClick={handleExportLeadsExcel}
-            className="px-3.5 py-2 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-bold transition-all flex items-center gap-1.5 shadow-xs"
+            className="px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer"
             title="Download current leads list as Excel spreadsheet"
           >
             <Download className="w-4 h-4 text-emerald-600" />
-            <span>Export to Excel (.xlsx)</span>
+            <span className="hidden sm:inline">Export Excel</span>
           </button>
 
-          <button
-            onClick={() => setActiveTab('customers')}
-            className="px-3.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition-all flex items-center gap-1.5 shadow-sm shadow-blue-500/25"
-          >
-            <Database className="w-4 h-4" />
-            <span>Go to Raw Customers Pool</span>
-          </button>
+          {!isAgent && (
+            <button
+              onClick={() => setActiveTab('customers')}
+              className="px-3.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition-all flex items-center gap-1.5 shadow-sm shadow-blue-500/25 cursor-pointer"
+            >
+              <Database className="w-4 h-4" />
+              <span>Customers Pool</span>
+            </button>
+          )}
         </div>
       </div>
 
-      {/* 2. QUICK-FILTER TABS */}
-      <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-3">
+      {/* 2. QUICK-FILTER TABS (Horizontally scrollable on mobile) */}
+      <div className="bg-white p-3 sm:p-4 rounded-xl border border-slate-200 shadow-xs space-y-3">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div className="flex flex-wrap items-center gap-1.5">
+          <div className="overflow-x-auto pb-1 sm:pb-0 flex items-center gap-1.5 shrink-0 -mx-1 px-1">
             {statusTabs.map((tab) => {
               const isActive = activeStatusTab === tab.id;
               return (
                 <button
                   key={tab.id}
                   onClick={() => setActiveStatusTab(tab.id)}
-                  className={`inline-flex items-center gap-2 px-3.5 py-2 rounded-full text-xs font-bold transition-all ${
+                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold transition-all shrink-0 cursor-pointer ${
                     isActive
                       ? 'bg-blue-600 text-white shadow-xs'
-                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200/80 hover:text-slate-900'
+                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                   }`}
                 >
                   <span>{tab.label}</span>
                   <span
-                    className={`text-[11px] px-2 py-0.2 rounded-full font-extrabold ${
+                    className={`text-[10px] px-1.5 py-0.2 rounded-full font-extrabold ${
                       isActive
                         ? 'bg-white/20 text-white'
                         : tab.badgeClass
