@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { useLead } from '../context/LeadContext';
 import { KpiCard } from './KpiCard';
 import { StatusBadge, PriorityBadge } from './Badge';
+import { formatWhatsAppUrl, WhatsAppIcon } from '../utils/phoneUtils';
 import { 
   PhoneCall, 
   Target, 
@@ -327,14 +328,16 @@ export const AgentDashboard = ({ onStartCall, onOpenLeadDetails, searchQuery, on
                     {/* Phone */}
                     <td className="py-3.5 px-4">
                       <div className="flex items-center gap-1.5">
-                        <button
-                          onClick={() => onStartCall(lead)}
-                          className="font-mono text-xs font-semibold text-blue-600 hover:text-blue-800 hover:underline flex items-center gap-1"
-                          title="Click to simulate call"
+                        <a
+                          href={formatWhatsAppUrl(lead.phone)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="font-mono text-xs font-bold text-emerald-700 hover:text-emerald-800 bg-emerald-50 hover:bg-emerald-100 px-2.5 py-1 rounded-lg border border-emerald-200 inline-flex items-center gap-1.5 transition-colors"
+                          title="Open WhatsApp Chat / Call"
                         >
-                          <Phone className="w-3.5 h-3.5" />
+                          <WhatsAppIcon className="w-3.5 h-3.5 fill-emerald-600" />
                           <span>{lead.phone}</span>
-                        </button>
+                        </a>
                       </div>
                     </td>
 

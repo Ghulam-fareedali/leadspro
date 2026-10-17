@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useLead } from '../context/LeadContext';
 import { KpiCard } from './KpiCard';
 import { StatusBadge, PriorityBadge } from './Badge';
+import { formatWhatsAppUrl, WhatsAppIcon } from '../utils/phoneUtils';
 import { 
   Users, 
   PhoneCall, 
@@ -342,7 +343,16 @@ export const AdminDashboard = ({ onOpenAssignModal, onOpenLeadDetails, onStartCa
                   <td className="py-3 px-4">
                     <div>
                       <p className="font-semibold text-slate-700">{lead.contactPerson || '—'}</p>
-                      <p className="text-[11px] font-mono text-blue-600 font-medium">{lead.phone}</p>
+                      <a
+                        href={formatWhatsAppUrl(lead.phone)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-[11px] font-mono text-emerald-700 hover:text-emerald-800 font-bold inline-flex items-center gap-1 mt-0.5"
+                        title="Click to open WhatsApp"
+                      >
+                        <WhatsAppIcon className="w-3 h-3 fill-emerald-600" />
+                        <span>{lead.phone}</span>
+                      </a>
                     </div>
                   </td>
 

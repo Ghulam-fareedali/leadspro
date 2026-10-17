@@ -15,6 +15,7 @@ import {
   AlertCircle
 } from 'lucide-react';
 import { StatusBadge } from './Badge';
+import { formatWhatsAppUrl, WhatsAppIcon } from '../utils/phoneUtils';
 
 export const CallModal = ({ lead, isOpen, onClose }) => {
   const { recordCallSimulation } = useLead();
@@ -92,7 +93,16 @@ export const CallModal = ({ lead, isOpen, onClose }) => {
               <p className="text-xs text-slate-300 flex items-center gap-2 mt-0.5">
                 <span>{lead.contactPerson || 'Decision Maker'}</span>
                 <span>•</span>
-                <span className="font-mono text-emerald-400">{lead.phone}</span>
+                <a
+                  href={formatWhatsAppUrl(lead.phone)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="font-mono text-emerald-400 hover:text-emerald-300 font-bold inline-flex items-center gap-1 underline underline-offset-2"
+                  title="Open WhatsApp Call / Chat"
+                >
+                  <WhatsAppIcon className="w-3.5 h-3.5 fill-emerald-400" />
+                  <span>{lead.phone}</span>
+                </a>
               </p>
             </div>
           </div>

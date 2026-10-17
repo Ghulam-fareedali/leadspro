@@ -2,24 +2,20 @@ import React, { useState, useMemo } from 'react';
 import * as XLSX from 'xlsx';
 import { useCrm } from '../context/CrmContext';
 import { StatusBadge, SourceBadge } from './StatusBadge';
+import { formatWhatsAppUrl, formatTelUrl, WhatsAppIcon } from '../utils/phoneUtils';
 import { 
   PhoneForwarded, 
-  Search, 
-  Filter, 
   Phone, 
-  Mail, 
-  UserCheck, 
-  Clock, 
-  CheckCircle2, 
-  XCircle, 
   ChevronDown, 
   Check, 
-  ArrowRight,
-  Database,
-  Flame,
-  Download,
-  FileSpreadsheet,
-  Trash2
+  Database, 
+  Download, 
+  Trash2,
+  MessageSquare,
+  FileText,
+  Calendar,
+  User,
+  Sparkles
 } from 'lucide-react';
 
 export const LeadsModule = ({ searchQuery, setSearchQuery }) => {
@@ -27,17 +23,17 @@ export const LeadsModule = ({ searchQuery, setSearchQuery }) => {
     leads, 
     agents, 
     updateLeadStatus, 
-    deleteLead,
-    analytics, 
+    deleteLead, 
     setActiveTab, 
-    statusConfig,
-    auth,
-    addToast
+    auth, 
+    addToast 
   } = useCrm();
 
   const isAgent = auth?.type === 'agent';
   const [activeStatusTab, setActiveStatusTab] = useState('ALL');
   const [agentFilter, setAgentFilter] = useState('ALL');
+  const [activeNoteLeadId, setActiveNoteLeadId] = useState(null);
+  const [noteDraft, setNoteDraft] = useState('');
 
   // Leads scoped to this user
   const scopedLeads = useMemo(() => {
@@ -47,11 +43,11 @@ export const LeadsModule = ({ searchQuery, setSearchQuery }) => {
   const filteredLeads = useMemo(() => {
     return scopedLeads.filter(lead => {
       const matchesSearch = !searchQuery ||
-        lead.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        lead.phone.includes(searchQuery) ||
-        lead.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        lead.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        lead.assignedAgent.toLowerCase().includes(searchQuery.toLowerCase());
+        lead.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        lead.phone?.includes(searchQuery) ||
+        lead.id?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        lead.email?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        lead.assignedAgent?.toLowerCase().includes(searchQuery.toLowerCase());
 
       if (!matchesSearch) return false;
 
@@ -66,7 +62,7 @@ export const LeadsModule = ({ searchQuery, setSearchQuery }) => {
   const statusTabs = [
     {
       id: 'ALL',
-      label: isAgent ? 'My Assigned Leads' : 'All Assigned Leads',
+      label: isAgent ? 'My Leads' : 'All Leads',
       count: scopedLeads.length,
       badgeClass: 'bg-slate-200 text-slate-700'
     },
@@ -128,6 +124,20 @@ export const LeadsModule = ({ searchQuery, setSearchQuery }) => {
     });
   };
 
+  const handleToggleNoteEdit = (lead) => {
+    if (activeNoteLeadId === lead.id) {
+      setActiveNoteLeadId(null);
+    } else {
+      setActiveNoteLeadId(lead.id);
+      setNoteDraft(lead.notes || '');
+    }
+  };
+
+  const handleSaveNote = async (leadId, currentStatus) => {
+    await updateLeadStatus(leadId, currentStatus, noteDraft);
+    setActiveNoteLeadId(null);
+  };
+
   return (
     <div className="space-y-4 sm:space-y-6">
       {/* 1. CLEAN SECTION HEADER */}
@@ -142,7 +152,7 @@ export const LeadsModule = ({ searchQuery, setSearchQuery }) => {
             </span>
           </div>
           <p className="text-xs text-slate-500 mt-0.5">
-            Active customer conversations, call updates, and conversion statuses.
+            Click any phone number to open WhatsApp call/chat instantly. 1-tap status updates for sales teams.
           </p>
         </div>
 
@@ -222,15 +232,202 @@ export const LeadsModule = ({ searchQuery, setSearchQuery }) => {
         </div>
       </div>
 
-      {/* 3. ASSIGNED LEADS TABLE */}
-      <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+      {/* 3. MOBILE VIEW: 1-TAP TOUCH CARDS (Shown on phones & small screens) */}
+      <div className="block md:hidden space-y-3">
+        {filteredLeads.length === 0 ? (
+          <div className="bg-white rounded-xl border border-slate-200 p-8 text-center text-slate-400">
+            <PhoneForwarded className="w-8 h-8 mx-auto mb-2 opacity-40 text-blue-600" />
+            <p className="font-semibold text-slate-700 text-sm">No leads in this filter</p>
+            <p className="text-xs text-slate-400 mt-1">
+              Change status tabs or clear search query to view leads.
+            </p>
+          </div>
+        ) : (
+          filteredLeads.map((lead) => {
+            const waUrl = formatWhatsAppUrl(lead.phone);
+            const telUrl = formatTelUrl(lead.phone);
+            const isEditingNote = activeNoteLeadId === lead.id;
+
+            return (
+              <div 
+                key={lead.id} 
+                className={`bg-white rounded-2xl border transition-all p-4 shadow-xs space-y-3 ${
+                  lead.status === 'Pending' 
+                    ? 'border-amber-200/80 bg-amber-50/15' 
+                    : lead.status === 'Interested'
+                    ? 'border-emerald-200/80 bg-emerald-50/10'
+                    : 'border-slate-200'
+                }`}
+              >
+                {/* Header: Name, ID, Source */}
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className="font-extrabold text-slate-900 text-base leading-snug">
+                        {lead.name}
+                      </span>
+                      <span className="font-mono text-[10px] font-bold bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded">
+                        {lead.id}
+                      </span>
+                    </div>
+                    {lead.email && (
+                      <p className="text-xs text-slate-400 truncate mt-0.5">
+                        {lead.email}
+                      </p>
+                    )}
+                  </div>
+                  <div className="shrink-0 flex items-center gap-1.5">
+                    <SourceBadge source={lead.source} />
+                  </div>
+                </div>
+
+                {/* Direct Phone Display (Clicking pushes to WhatsApp) */}
+                <div className="flex items-center justify-between text-xs bg-slate-50/80 px-3 py-2 rounded-xl border border-slate-100">
+                  <div className="flex items-center gap-2">
+                    <span className="text-slate-400 text-[11px] font-medium">Contact:</span>
+                    <a
+                      href={waUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="font-mono font-bold text-emerald-700 hover:text-emerald-800 text-sm tracking-wide flex items-center gap-1.5"
+                      title="Tap to open WhatsApp"
+                    >
+                      <WhatsAppIcon className="w-4 h-4 fill-emerald-600" />
+                      <span>{lead.phone}</span>
+                    </a>
+                  </div>
+
+                  {!isAgent && (
+                    <span className="text-[11px] text-slate-500 font-medium truncate max-w-[120px]">
+                      👤 {lead.assignedAgent}
+                    </span>
+                  )}
+                </div>
+
+                {/* 1-Tap Big Action Buttons for Mobile Phone */}
+                <div className="grid grid-cols-2 gap-2 pt-0.5">
+                  {/* WhatsApp Push Button */}
+                  <a
+                    href={waUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="py-2.5 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white font-bold text-xs shadow-sm shadow-emerald-600/25 active:scale-[0.98] transition-all flex items-center justify-center gap-2"
+                  >
+                    <WhatsAppIcon className="w-4 h-4 fill-white shrink-0" />
+                    <span>WhatsApp</span>
+                  </a>
+
+                  {/* Regular Phone Call Button */}
+                  <a
+                    href={telUrl}
+                    className="py-2.5 px-3 rounded-xl bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-bold text-xs shadow-sm shadow-blue-600/25 active:scale-[0.98] transition-all flex items-center justify-center gap-1.5"
+                  >
+                    <Phone className="w-3.5 h-3.5 shrink-0" />
+                    <span>Direct Call</span>
+                  </a>
+                </div>
+
+                {/* 1-Tap Status Quick Selector (Super fast for calling team) */}
+                <div className="pt-2 border-t border-slate-100 space-y-1.5">
+                  <div className="flex items-center justify-between text-[11px]">
+                    <span className="font-bold uppercase tracking-wider text-slate-400">
+                      1-Tap Call Status:
+                    </span>
+                    <StatusBadge status={lead.status} size="sm" />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-1.5">
+                    {[
+                      { id: 'Pending', label: '1. Pending', bg: 'bg-amber-500 border-amber-500 text-white' },
+                      { id: 'Connected', label: '2. Connected', bg: 'bg-blue-600 border-blue-600 text-white' },
+                      { id: 'Interested', label: '3. 🔥 Interested', bg: 'bg-emerald-600 border-emerald-600 text-white' },
+                      { id: 'Not Interested', label: '4. ✕ Not Int.', bg: 'bg-rose-600 border-rose-600 text-white' }
+                    ].map(st => {
+                      const isSelected = lead.status === st.id;
+                      return (
+                        <button
+                          key={st.id}
+                          onClick={() => updateLeadStatus(lead.id, st.id)}
+                          className={`py-2 px-2 rounded-xl text-xs font-bold border transition-all flex items-center justify-center gap-1 cursor-pointer active:scale-95 ${
+                            isSelected
+                              ? `${st.bg} shadow-xs font-extrabold`
+                              : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'
+                          }`}
+                        >
+                          {isSelected && <Check className="w-3.5 h-3.5 stroke-[3]" />}
+                          <span>{st.label}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Notes & Call Log Toggle */}
+                <div className="pt-1">
+                  {isEditingNote ? (
+                    <div className="space-y-2 bg-slate-50 p-2.5 rounded-xl border border-slate-200">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[11px] font-bold text-slate-700">Call Log / Note:</span>
+                        <button
+                          onClick={() => setActiveNoteLeadId(null)}
+                          className="text-[10px] text-slate-400 hover:text-slate-600"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                      <textarea
+                        rows={2}
+                        value={noteDraft}
+                        onChange={(e) => setNoteDraft(e.target.value)}
+                        placeholder="e.g. Talked on WhatsApp, sent pricing quotation, call back tomorrow..."
+                        className="w-full text-xs p-2 rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                      />
+                      <button
+                        onClick={() => handleSaveNote(lead.id, lead.status)}
+                        className="w-full py-1.5 bg-blue-600 text-white font-bold text-xs rounded-lg hover:bg-blue-700 transition-colors"
+                      >
+                        Save Note to MongoDB
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="flex items-center justify-between text-xs text-slate-500">
+                      <button
+                        onClick={() => handleToggleNoteEdit(lead)}
+                        className="inline-flex items-center gap-1 text-[11px] text-blue-600 hover:text-blue-800 font-semibold cursor-pointer"
+                      >
+                        <MessageSquare className="w-3 h-3" />
+                        <span>{lead.notes ? 'Edit Note' : '+ Add Note'}</span>
+                      </button>
+
+                      {lead.lastContactDate && (
+                        <span className="text-[10px] text-slate-400">
+                          {lead.lastContactDate}
+                        </span>
+                      )}
+                    </div>
+                  )}
+
+                  {lead.notes && !isEditingNote && (
+                    <div className="mt-1.5 p-2 rounded-lg bg-slate-50 border border-slate-100 text-[11px] text-slate-600">
+                      <strong className="text-slate-800">Note:</strong> {lead.notes}
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })
+        )}
+      </div>
+
+      {/* 4. DESKTOP VIEW: FULL TABLE (Hidden on mobile phones, shown on md and larger) */}
+      <div className="hidden md:block bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs">
             <thead>
               <tr className="bg-slate-50/80 border-b border-slate-200 text-slate-500 font-bold uppercase tracking-wider text-[11px]">
                 <th className="py-3.5 px-5">Lead ID</th>
                 <th className="py-3.5 px-5">Lead Name</th>
-                <th className="py-3.5 px-4">Phone Number</th>
+                <th className="py-3.5 px-4">Phone / WhatsApp</th>
                 <th className="py-3.5 px-4">Assigned Agent</th>
                 <th className="py-3.5 px-6 min-w-[220px]">Status (Interactive Dropdown)</th>
                 <th className="py-3.5 px-4">Source / Origin</th>
@@ -241,7 +438,7 @@ export const LeadsModule = ({ searchQuery, setSearchQuery }) => {
               {filteredLeads.length === 0 ? (
                 <tr>
                   <td colSpan={7} className="py-12 text-center text-slate-400">
-                    <PhoneForwarded className="w-8 h-8 mx-auto mb-2 opacity-40" />
+                    <PhoneForwarded className="w-8 h-8 mx-auto mb-2 opacity-40 text-blue-600" />
                     <p className="font-semibold text-slate-600">No leads in this filter</p>
                     <p className="text-xs text-slate-400 mt-0.5">
                       {leads.length === 0
@@ -251,110 +448,143 @@ export const LeadsModule = ({ searchQuery, setSearchQuery }) => {
                   </td>
                 </tr>
               ) : (
-                filteredLeads.map((lead) => (
-                  <tr
-                    key={lead.id}
-                    className={`hover:bg-slate-50/80 transition-colors ${
-                      lead.status === 'Pending' ? 'bg-amber-50/15' : ''
-                    }`}
-                  >
-                    <td className="py-3.5 px-5">
-                      <div className="space-y-0.5">
-                        <span className="font-mono font-bold text-slate-800 bg-slate-100 px-2 py-0.5 rounded text-[11px]">
-                          {lead.id}
-                        </span>
-                        <p className="text-[10px] text-slate-400 font-mono">
-                          from {lead.customerId}
-                        </p>
-                      </div>
-                    </td>
+                filteredLeads.map((lead) => {
+                  const waUrl = formatWhatsAppUrl(lead.phone);
+                  const telUrl = formatTelUrl(lead.phone);
 
-                    <td className="py-3.5 px-5">
-                      <div>
-                        <p className="font-bold text-slate-900 text-sm leading-tight">
-                          {lead.name}
-                        </p>
-                        <p className="text-[11px] text-slate-400 truncate max-w-xs">
-                          {lead.email || 'No email registered'}
-                        </p>
-                      </div>
-                    </td>
-
-                    <td className="py-3.5 px-4 font-mono font-semibold text-blue-600">
-                      <a href={`tel:${lead.phone}`} className="hover:underline flex items-center gap-1.5">
-                        <Phone className="w-3.5 h-3.5" />
-                        <span>{lead.phone}</span>
-                      </a>
-                    </td>
-
-                    <td className="py-3.5 px-4">
-                      <div className="flex items-center gap-2">
-                        <div className="w-6 h-6 rounded-full bg-slate-200 text-slate-700 font-bold flex items-center justify-center text-[10px]">
-                          {lead.assignedAgent.split(' ').map(n => n[0]).join('')}
+                  return (
+                    <tr
+                      key={lead.id}
+                      className={`hover:bg-slate-50/80 transition-colors ${
+                        lead.status === 'Pending' ? 'bg-amber-50/15' : ''
+                      }`}
+                    >
+                      <td className="py-3.5 px-5">
+                        <div className="space-y-0.5">
+                          <span className="font-mono font-bold text-slate-800 bg-slate-100 px-2 py-0.5 rounded text-[11px]">
+                            {lead.id}
+                          </span>
+                          <p className="text-[10px] text-slate-400 font-mono">
+                            from {lead.customerId}
+                          </p>
                         </div>
-                        <span className="font-semibold text-slate-800">
-                          {lead.assignedAgent}
-                        </span>
-                      </div>
-                    </td>
+                      </td>
 
-                    <td className="py-3.5 px-6">
-                      <div className="relative">
-                        <select
-                          value={lead.status}
-                          onChange={(e) => updateLeadStatus(lead.id, e.target.value)}
-                          aria-label={`Update status for ${lead.name}`}
-                          className={`w-full appearance-none pl-3 pr-8 py-1.5 rounded-lg text-xs font-bold border shadow-xs transition-all cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500/30 ${
-                            lead.status === 'Pending'
-                              ? 'bg-amber-50 border-amber-300 text-amber-900'
-                              : lead.status === 'Connected'
-                              ? 'bg-blue-50 border-blue-300 text-blue-900'
-                              : lead.status === 'Interested'
-                              ? 'bg-emerald-50 border-emerald-300 text-emerald-900'
-                              : 'bg-rose-50 border-rose-300 text-rose-900'
-                          }`}
-                        >
-                          <option value="Pending">1. Pending (Awaiting Outreach)</option>
-                          <option value="Connected">2. Connected (Contact Made)</option>
-                          <option value="Interested">3. Interested (Hot Lead 🔥)</option>
-                          <option value="Not Interested">4. Not Interested (Dead Lead ✕)</option>
-                        </select>
-                        <ChevronDown className="w-3.5 h-3.5 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none opacity-60" />
-                      </div>
-                    </td>
+                      <td className="py-3.5 px-5">
+                        <div>
+                          <p className="font-bold text-slate-900 text-sm leading-tight">
+                            {lead.name}
+                          </p>
+                          <p className="text-[11px] text-slate-400 truncate max-w-xs">
+                            {lead.email || 'No email registered'}
+                          </p>
+                        </div>
+                      </td>
 
-                    <td className="py-3.5 px-4">
-                      <SourceBadge source={lead.source} />
-                    </td>
-
-                    <td className="py-3.5 px-4 text-right">
-                      <div className="inline-flex items-center justify-end gap-2">
-                        {lead.status === 'Pending' ? (
-                          <button
-                            onClick={() => updateLeadStatus(lead.id, 'Connected')}
-                            className="px-2.5 py-1 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-bold text-[11px] shadow-xs transition-all inline-flex items-center gap-1"
-                            title="Mark Connected upon first call"
+                      {/* Phone Number with 1-Tap WhatsApp Push */}
+                      <td className="py-3.5 px-4 font-mono font-semibold">
+                        <div className="flex items-center gap-2">
+                          <a 
+                            href={waUrl} 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 transition-colors"
+                            title="Click to open WhatsApp Call / Chat"
                           >
-                            <Phone className="w-3 h-3" />
-                            <span>Call Done</span>
-                          </button>
-                        ) : (
-                          <StatusBadge status={lead.status} size="sm" />
-                        )}
+                            <WhatsAppIcon className="w-3.5 h-3.5 fill-emerald-600 shrink-0" />
+                            <span>{lead.phone}</span>
+                          </a>
 
-                        {!isAgent && (
-                          <button
-                            onClick={() => deleteLead(lead.id)}
-                            className="p-1 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
-                            title="Remove lead from pipeline"
+                          <a
+                            href={telUrl}
+                            className="p-1 rounded-lg text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
+                            title="Direct Phone Call"
                           >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))
+                            <Phone className="w-3.5 h-3.5" />
+                          </a>
+                        </div>
+                      </td>
+
+                      <td className="py-3.5 px-4">
+                        <div className="flex items-center gap-2">
+                          <div className="w-6 h-6 rounded-full bg-slate-200 text-slate-700 font-bold flex items-center justify-center text-[10px]">
+                            {lead.assignedAgent ? lead.assignedAgent.split(' ').map(n => n[0]).join('') : 'A'}
+                          </div>
+                          <span className="font-semibold text-slate-800">
+                            {lead.assignedAgent}
+                          </span>
+                        </div>
+                      </td>
+
+                      <td className="py-3.5 px-6">
+                        <div className="relative">
+                          <select
+                            value={lead.status}
+                            onChange={(e) => updateLeadStatus(lead.id, e.target.value)}
+                            aria-label={`Update status for ${lead.name}`}
+                            className={`w-full appearance-none pl-3 pr-8 py-1.5 rounded-lg text-xs font-bold border shadow-xs transition-all cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500/30 ${
+                              lead.status === 'Pending'
+                                ? 'bg-amber-50 border-amber-300 text-amber-900'
+                                : lead.status === 'Connected'
+                                ? 'bg-blue-50 border-blue-300 text-blue-900'
+                                : lead.status === 'Interested'
+                                ? 'bg-emerald-50 border-emerald-300 text-emerald-900'
+                                : 'bg-rose-50 border-rose-300 text-rose-900'
+                            }`}
+                          >
+                            <option value="Pending">1. Pending (Awaiting Outreach)</option>
+                            <option value="Connected">2. Connected (Contact Made)</option>
+                            <option value="Interested">3. Interested (Hot Lead 🔥)</option>
+                            <option value="Not Interested">4. Not Interested (Dead Lead ✕)</option>
+                          </select>
+                          <ChevronDown className="w-3.5 h-3.5 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none opacity-60" />
+                        </div>
+                      </td>
+
+                      <td className="py-3.5 px-4">
+                        <SourceBadge source={lead.source} />
+                      </td>
+
+                      <td className="py-3.5 px-4 text-right">
+                        <div className="inline-flex items-center justify-end gap-1.5">
+                          {/* 1-Click WhatsApp Quick Icon */}
+                          <a
+                            href={waUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="p-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 transition-colors"
+                            title="Open WhatsApp Chat / Call"
+                          >
+                            <WhatsAppIcon className="w-3.5 h-3.5 fill-emerald-600" />
+                          </a>
+
+                          {lead.status === 'Pending' ? (
+                            <button
+                              onClick={() => updateLeadStatus(lead.id, 'Connected')}
+                              className="px-2.5 py-1 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-bold text-[11px] shadow-xs transition-all inline-flex items-center gap-1 cursor-pointer"
+                              title="Mark Connected upon first call"
+                            >
+                              <Phone className="w-3 h-3" />
+                              <span>Connected</span>
+                            </button>
+                          ) : (
+                            <StatusBadge status={lead.status} size="sm" />
+                          )}
+
+                          {!isAgent && (
+                            <button
+                              onClick={() => deleteLead(lead.id)}
+                              className="p-1 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
+                              title="Remove lead from pipeline"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>

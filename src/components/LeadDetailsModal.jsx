@@ -17,6 +17,7 @@ import {
   History
 } from 'lucide-react';
 import { StatusBadge, PriorityBadge } from './Badge';
+import { formatWhatsAppUrl, formatTelUrl, WhatsAppIcon } from '../utils/phoneUtils';
 
 export const LeadDetailsModal = ({ lead, isOpen, onClose, onStartCall }) => {
   const { updateLeadNotes, updateLeadStatus, reassignLead, users } = useLead();
@@ -89,9 +90,27 @@ export const LeadDetailsModal = ({ lead, isOpen, onClose, onStartCall }) => {
             <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200/80 space-y-1">
               <span className="text-[10px] font-bold uppercase text-slate-400 tracking-wider flex items-center gap-1">
                 <Phone className="w-3 h-3 text-slate-400" />
-                Phone Number
+                Phone Number (WhatsApp)
               </span>
-              <p className="text-sm font-mono font-bold text-blue-600">{lead.phone}</p>
+              <div className="flex items-center gap-2">
+                <a
+                  href={formatWhatsAppUrl(lead.phone)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-sm font-mono font-bold text-emerald-700 hover:text-emerald-800 flex items-center gap-1.5"
+                  title="Click to WhatsApp Call / Chat"
+                >
+                  <WhatsAppIcon className="w-3.5 h-3.5 fill-emerald-600 shrink-0" />
+                  <span>{lead.phone}</span>
+                </a>
+                <a
+                  href={formatTelUrl(lead.phone)}
+                  className="p-1 rounded text-slate-400 hover:text-blue-600 transition-colors"
+                  title="Direct Phone Call"
+                >
+                  <Phone className="w-3.5 h-3.5" />
+                </a>
+              </div>
             </div>
 
             <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200/80 space-y-1">

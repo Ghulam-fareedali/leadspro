@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { useLead } from '../context/LeadContext';
 import { StatusBadge, PriorityBadge } from './Badge';
+import { formatWhatsAppUrl, WhatsAppIcon } from '../utils/phoneUtils';
 import { 
   Search, 
   Filter, 
@@ -212,8 +213,17 @@ export const AllLeadsView = ({ onOpenAssignModal, onOpenLeadDetails, onStartCall
                     {lead.contactPerson || '—'}
                   </td>
 
-                  <td className="py-3 px-4 font-mono font-medium text-blue-600">
-                    {lead.phone}
+                  <td className="py-3 px-4 font-mono font-medium">
+                    <a
+                      href={formatWhatsAppUrl(lead.phone)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 text-xs transition-colors"
+                      title="Open WhatsApp Chat / Call"
+                    >
+                      <WhatsAppIcon className="w-3.5 h-3.5 fill-emerald-600" />
+                      <span>{lead.phone}</span>
+                    </a>
                   </td>
 
                   <td className="py-3 px-4">
