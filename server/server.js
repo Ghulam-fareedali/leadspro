@@ -23,19 +23,40 @@ app.use(async (req, res, next) => {
   try {
     await connectDB();
   } catch (err) {
-    // Continue so health check or fallback still responds
+    console.error('Database connection middleware error:', err.message);
   }
   next();
 });
 
 // Health check endpoint
-app.get('/api/health', (req, res) => {
-  const isDbConnected = Boolean(process.env.MONGODB_URI);
+app.get('/api/health', async (req, res) => {
+  let dbStatus = 'Disconnected';
+  let dbError = null;
+  const isUriSet = Boolean(process.env.MONGODB_URI);
+
+  if (isUriSet) {
+    try {
+      await connectDB();
+      const state = (await import('mongoose')).default.connection.readyState;
+      if (state === 1) {
+        dbStatus = 'MongoDB Live Connected';
+      } else {
+        dbStatus = `MongoDB ReadyState: ${state}`;
+      }
+    } catch (err) {
+      dbStatus = 'Connection Error';
+      dbError = err.message;
+    }
+  } else {
+    dbStatus = 'MONGODB_URI Missing';
+  }
+
   res.json({
     status: 'ok',
     timestamp: new Date().toISOString(),
-    database: isDbConnected ? 'MongoDB Live Connected' : 'MONGODB_URI Missing',
-    mongodbUriSet: Boolean(process.env.MONGODB_URI)
+    database: dbStatus,
+    dbError,
+    mongodbUriSet: isUriSet
   });
 });
 

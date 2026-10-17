@@ -24,19 +24,19 @@ export async function connectDB() {
   const uri = process.env.MONGODB_URI;
 
   if (!uri) {
-    console.warn('⚠️ MONGODB_URI is not defined in environment variables. Running in local in-memory fallback mode.');
+    console.warn('⚠️ MONGODB_URI is not defined in environment variables.');
     return null;
   }
 
-  if (cached.conn) {
+  if (cached.conn && mongoose.connection.readyState === 1) {
     return cached.conn;
   }
 
   if (!cached.promise) {
     const opts = {
-      bufferCommands: false,
+      bufferCommands: true,
       maxPoolSize: 10,
-      serverSelectionTimeoutMS: 5000,
+      serverSelectionTimeoutMS: 8000,
     };
 
     cached.promise = mongoose.connect(uri, opts).then((mongooseInstance) => {
@@ -53,7 +53,7 @@ export async function connectDB() {
     cached.conn = await cached.promise;
   } catch (e) {
     cached.promise = null;
-    return null;
+    throw e;
   }
 
   return cached.conn;
