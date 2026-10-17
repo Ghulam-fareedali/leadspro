@@ -27,7 +27,8 @@ import {
   AlertTriangle,
   X,
   Phone,
-  Clock
+  Clock,
+  Briefcase
 } from 'lucide-react';
 
 export const CustomersModule = ({ onOpenUpload, searchQuery, setSearchQuery }) => {
@@ -64,27 +65,29 @@ export const CustomersModule = ({ onOpenUpload, searchQuery, setSearchQuery }) =
     assignedCount: 0
   });
 
-  // Calculate counts per business category
+  // Calculate counts per business category safely
   const categoryCounts = useMemo(() => {
     const counts = {};
-    customers.forEach(c => {
-      const cat = c.category || 'General Business';
+    (customers || []).forEach(c => {
+      const cat = c?.category || 'General Business';
       counts[cat] = (counts[cat] || 0) + 1;
     });
     return counts;
   }, [customers]);
 
-  // Filtered customer list
+  // Filtered customer list (fully sanitized against null/undefined fields)
   const filteredCustomers = useMemo(() => {
-    return customers.filter(customer => {
-      const matchesSearch = !searchQuery ||
-        customer.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        customer.phone.includes(searchQuery) ||
-        customer.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        customer.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        customer.source.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        ((customer.category || '').toLowerCase().includes(searchQuery.toLowerCase())) ||
-        (customer.assignedTo && customer.assignedTo.toLowerCase().includes(searchQuery.toLowerCase()));
+    return (customers || []).filter(customer => {
+      if (!customer) return false;
+      const q = (searchQuery || '').toLowerCase().trim();
+      const matchesSearch = !q ||
+        (customer.name && customer.name.toLowerCase().includes(q)) ||
+        (customer.phone && String(customer.phone).includes(q)) ||
+        (customer.id && String(customer.id).toLowerCase().includes(q)) ||
+        (customer.email && customer.email.toLowerCase().includes(q)) ||
+        (customer.source && customer.source.toLowerCase().includes(q)) ||
+        (customer.category && customer.category.toLowerCase().includes(q)) ||
+        (customer.assignedTo && customer.assignedTo.toLowerCase().includes(q));
 
       if (!matchesSearch) return false;
 
@@ -103,7 +106,7 @@ export const CustomersModule = ({ onOpenUpload, searchQuery, setSearchQuery }) =
   }, [customers, searchQuery, statusFilter, sourceFilter, selectedCategory]);
 
   const uniqueSources = useMemo(() => {
-    return Array.from(new Set(customers.map(c => c.source)));
+    return Array.from(new Set((customers || []).map(c => c?.source).filter(Boolean)));
   }, [customers]);
 
   // Bulk select toggles
@@ -217,12 +220,12 @@ export const CustomersModule = ({ onOpenUpload, searchQuery, setSearchQuery }) =
       "Customer ID": c.id,
       "Customer / Company Name": c.name,
       "Business Category": c.category || 'General Business',
-      "Calling Timing": getCategoryConfig(c.category).timing,
+      "Calling Timing": getCategoryConfig(c.category)?.timings || '9:00 AM – 6:00 PM',
       "Phone Number": c.phone,
-      "Email Address": c.email,
-      "Lead Source": c.source,
-      "City": c.city,
-      "Imported Date": c.importedDate,
+      "Email Address": c.email || '',
+      "Lead Source": c.source || '',
+      "City": c.city || '',
+      "Imported Date": c.importedDate || '',
       "Assignment Status": c.isAssigned ? "Assigned" : "Unassigned",
       "Assigned Agent": c.assignedTo || "None",
       "Assigned Timestamp": c.assignedAt || "N/A"
@@ -371,7 +374,7 @@ export const CustomersModule = ({ onOpenUpload, searchQuery, setSearchQuery }) =
                 onChange={(e) => setSelectedAgent(e.target.value)}
                 className="bg-transparent text-white font-bold text-xs focus:outline-none cursor-pointer"
               >
-                {agents.map((agent) => (
+                {(agents || []).map((agent) => (
                   <option key={agent.id} value={agent.name} className="text-slate-900">
                     {agent.name}
                   </option>
@@ -460,22 +463,24 @@ export const CustomersModule = ({ onOpenUpload, searchQuery, setSearchQuery }) =
           {BUSINESS_CATEGORIES.map(cat => {
             const count = categoryCounts[cat.id] || 0;
             const isSelected = selectedCategory === cat.id;
+            const Icon = cat.icon || Briefcase;
             return (
               <button
                 key={cat.id}
                 onClick={() => setSelectedCategory(cat.id)}
                 className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all cursor-pointer flex items-center gap-1.5 border ${
                   isSelected
-                    ? 'bg-blue-600 text-white border-blue-600 shadow-sm shadow-blue-500/25'
+                    ? `${cat.activeClass || 'bg-blue-600 text-white border-blue-600'} shadow-sm shadow-blue-500/25`
                     : 'bg-white hover:bg-slate-50 text-slate-700 border-slate-200'
                 }`}
+                title={`${cat.label} - Optimal Calling Hours: ${cat.timings}`}
               >
-                <span>{cat.icon}</span>
-                <span>{cat.label}</span>
+                <Icon className="w-3.5 h-3.5 shrink-0" />
+                <span>{cat.shortLabel || cat.label}</span>
                 <span className={`px-1.5 py-0.5 rounded-md text-[10px] font-mono ${
                   isSelected ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-500'
                 }`}>
-                  ⏰ {cat.timing}
+                  ⏰ {cat.timings}
                 </span>
                 <span className={`px-1.5 py-0.2 rounded-full text-[10px] ${
                   isSelected ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-700'
@@ -540,7 +545,7 @@ export const CustomersModule = ({ onOpenUpload, searchQuery, setSearchQuery }) =
             <option value="ALL">All Categories ({customers.length})</option>
             {BUSINESS_CATEGORIES.map(cat => (
               <option key={cat.id} value={cat.id}>
-                {cat.icon} {cat.label} ({categoryCounts[cat.id] || 0})
+                {cat.label} ({categoryCounts[cat.id] || 0})
               </option>
             ))}
           </select>
@@ -680,7 +685,7 @@ export const CustomersModule = ({ onOpenUpload, searchQuery, setSearchQuery }) =
                       className="flex-1 py-1.5 px-2 bg-blue-50 text-blue-700 border border-blue-200 rounded-lg text-xs font-bold transition-all cursor-pointer focus:outline-none"
                     >
                       <option value="" disabled>Assign to Agent...</option>
-                      {agents.map((agent) => (
+                      {(agents || []).map((agent) => (
                         <option key={agent.id} value={agent.name}>
                           {agent.name}
                         </option>
@@ -843,7 +848,7 @@ export const CustomersModule = ({ onOpenUpload, searchQuery, setSearchQuery }) =
                               className="px-2.5 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-lg text-xs font-bold transition-all cursor-pointer focus:outline-none"
                             >
                               <option value="" disabled>Assign To...</option>
-                              {agents.map((agent) => (
+                              {(agents || []).map((agent) => (
                                 <option key={agent.id} value={agent.name}>
                                   {agent.name}
                                 </option>
