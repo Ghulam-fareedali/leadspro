@@ -32,7 +32,8 @@ app.use(async (req, res, next) => {
 app.get('/api/health', async (req, res) => {
   let dbStatus = 'Disconnected';
   let dbError = null;
-  const isUriSet = Boolean(process.env.MONGODB_URI);
+  const DEFAULT_URI = 'mongodb+srv://fareedalighulam_db_user:AF2JWmh5wQrr5EuL@cluster0.kbifor1.mongodb.net/leadspro?retryWrites=true&w=majority';
+  const isUriSet = Boolean(process.env.MONGODB_URI || DEFAULT_URI);
 
   if (isUriSet) {
     try {

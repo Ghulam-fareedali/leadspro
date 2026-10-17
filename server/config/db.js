@@ -20,8 +20,10 @@ if (!cached) {
   cached = global.mongoose = { conn: null, promise: null };
 }
 
+const DEFAULT_MONGODB_URI = 'mongodb+srv://fareedalighulam_db_user:AF2JWmh5wQrr5EuL@cluster0.kbifor1.mongodb.net/leadspro?retryWrites=true&w=majority';
+
 export async function connectDB() {
-  const uri = process.env.MONGODB_URI;
+  const uri = process.env.MONGODB_URI || DEFAULT_MONGODB_URI;
 
   if (!uri) {
     console.warn('⚠️ MONGODB_URI is not defined in environment variables.');
