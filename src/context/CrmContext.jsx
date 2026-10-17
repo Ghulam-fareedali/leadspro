@@ -1,62 +1,21 @@
 import React, { createContext, useContext, useState, useEffect, useMemo, useCallback } from 'react';
-import { 
-  INITIAL_AGENTS, 
-  INITIAL_CUSTOMERS, 
-  INITIAL_LEADS, 
-  LEAD_STATUS_CONFIG 
-} from '../data/customerData';
-
-// Clean test data version marker - ensures any cached dummy records and mock agents are purged
-const DATA_STORAGE_VERSION = 'v3_production_realtime';
-if (typeof window !== 'undefined') {
-  try {
-    const cachedVer = localStorage.getItem('leadspro_storage_version');
-    if (cachedVer !== DATA_STORAGE_VERSION) {
-      localStorage.removeItem('leadspro_customers');
-      localStorage.removeItem('leadspro_leads');
-      localStorage.removeItem('leadspro_agents');
-      localStorage.removeItem('leadspro_auth');
-      localStorage.setItem('leadspro_storage_version', DATA_STORAGE_VERSION);
-    }
-  } catch (e) {
-    console.warn('Storage version check failed:', e);
-  }
-}
+import { LEAD_STATUS_CONFIG } from '../data/customerData';
 
 export const DEFAULT_ADMIN = {
   email: 'admin@leadspro.com',
   username: 'admin',
   password: 'admin',
-  name: 'Admin'
+  name: 'Admin',
+  role: 'System Administrator'
 };
 
 const CrmContext = createContext(null);
 
 export const CrmProvider = ({ children }) => {
-  // Configured Admin Profile (Name, Email, Password) - with instant default credentials
-  const [adminProfile, setAdminProfile] = useState(() => {
-    try {
-      const cached = localStorage.getItem('leadspro_admin_profile');
-      return cached ? JSON.parse(cached) : DEFAULT_ADMIN;
-    } catch {
-      return DEFAULT_ADMIN;
-    }
-  });
+  // Configured Admin Profile (populated directly from MongoDB)
+  const [adminProfile, setAdminProfile] = useState(DEFAULT_ADMIN);
 
-  // Load cached team agents or fallback to INITIAL_AGENTS (empty array for clean production)
-  const [agents, setAgents] = useState(() => {
-    try {
-      const cached = localStorage.getItem('leadspro_agents');
-      if (cached) {
-        return JSON.parse(cached);
-      }
-      return INITIAL_AGENTS;
-    } catch {
-      return INITIAL_AGENTS;
-    }
-  });
-
-  // Authentication: null (show login screen) | { type: 'admin', ... } | { type: 'agent', ... }
+  // Authentication session (only auth token/session preserved in localStorage)
   const [auth, setAuth] = useState(() => {
     try {
       const cached = localStorage.getItem('leadspro_auth');
@@ -66,47 +25,32 @@ export const CrmProvider = ({ children }) => {
     }
   });
 
-  const [customers, setCustomers] = useState(() => {
-    try {
-      const cached = localStorage.getItem('leadspro_customers');
-      return cached ? JSON.parse(cached) : INITIAL_CUSTOMERS;
-    } catch {
-      return INITIAL_CUSTOMERS;
-    }
-  });
-
-  const [leads, setLeads] = useState(() => {
-    try {
-      const cached = localStorage.getItem('leadspro_leads');
-      return cached ? JSON.parse(cached) : INITIAL_LEADS;
-    } catch {
-      return INITIAL_LEADS;
-    }
-  });
+  // Strict MongoDB Database States (ZERO dummy/mock data, ZERO localStorage fallback)
+  const [customers, setCustomers] = useState([]);
+  const [leads, setLeads] = useState([]);
+  const [agents, setAgents] = useState([]);
 
   const [activeTab, setActiveTab] = useState('dashboard');
   const [toasts, setToasts] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [dbStatus, setDbStatus] = useState({
     connected: false,
-    mode: 'local',
-    message: 'Local Cache Mode'
+    mode: 'connecting',
+    message: 'Connecting to MongoDB...'
   });
 
-  // Keep localStorage in sync as robust fallback
+  // Persist only authentication session so refresh doesn't log the user out
   useEffect(() => {
     try {
-      localStorage.setItem('leadspro_agents', JSON.stringify(agents));
-      localStorage.setItem('leadspro_customers', JSON.stringify(customers));
-      localStorage.setItem('leadspro_leads', JSON.stringify(leads));
       if (auth) {
         localStorage.setItem('leadspro_auth', JSON.stringify(auth));
       } else {
         localStorage.removeItem('leadspro_auth');
       }
     } catch (err) {
-      console.warn('Storage sync failed:', err);
+      console.warn('Auth session storage sync failed:', err);
     }
-  }, [agents, customers, leads, auth]);
+  }, [auth]);
 
   // Toast Notification Manager
   const addToast = useCallback((toast) => {
@@ -121,127 +65,94 @@ export const CrmProvider = ({ children }) => {
     setToasts(prev => prev.filter(t => t.id !== id));
   }, []);
 
-  const CLOUD_SYNC_BIN = 'https://extendsclass.com/api/json-storage/bin/fecfccb';
-  const CLOUD_SYNC_KEY = 'leadspro_secret_key_9981';
-
-  // Push latest state to shared cloud
-  const pushToSharedCloud = useCallback(async (overrides = {}) => {
-    try {
-      const payload = {
-        customers: overrides.customers !== undefined ? overrides.customers : customers,
-        agents: overrides.agents !== undefined ? overrides.agents : agents,
-        leads: overrides.leads !== undefined ? overrides.leads : leads,
-        admin: overrides.admin !== undefined ? overrides.admin : (adminProfile || DEFAULT_ADMIN),
-        version: '1.0',
-        updatedAt: new Date().toISOString()
-      };
-
-      try {
-        localStorage.setItem('leadspro_customers', JSON.stringify(payload.customers));
-        localStorage.setItem('leadspro_agents', JSON.stringify(payload.agents));
-        localStorage.setItem('leadspro_leads', JSON.stringify(payload.leads));
-        localStorage.setItem('leadspro_admin_profile', JSON.stringify(payload.admin));
-      } catch (err) {}
-
-      await fetch(CLOUD_SYNC_BIN, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Security-key': CLOUD_SYNC_KEY
-        },
-        body: JSON.stringify(payload)
-      }).catch(() => {});
-    } catch (e) {
-      console.warn('Cloud sync push warning:', e);
-    }
-  }, [customers, agents, leads, adminProfile]);
-
-  // Sync state across all devices
+  // Strict MongoDB Fetcher: Pulls fresh, real-time records from MongoDB collections
   const syncWithBackend = useCallback(async (isManual = false) => {
     try {
-      // 1. Fetch directly from shared cloud bin (accessible across all PCs immediately)
-      let cloudData = null;
-      try {
-        const cloudRes = await fetch(`${CLOUD_SYNC_BIN}?t=${Date.now()}`, {
-          headers: { 'Cache-Control': 'no-cache' }
-        });
-        if (cloudRes.ok) {
-          cloudData = await cloudRes.json();
+      const [custRes, leadRes, agentRes, adminRes, healthRes] = await Promise.all([
+        fetch('/api/customers?t=' + Date.now()).catch(() => null),
+        fetch('/api/leads?t=' + Date.now()).catch(() => null),
+        fetch('/api/agents?t=' + Date.now()).catch(() => null),
+        fetch('/api/admin?t=' + Date.now()).catch(() => null),
+        fetch('/api/health?t=' + Date.now()).catch(() => null)
+      ]);
+
+      let isConnected = false;
+
+      // 1. Customers strictly from MongoDB
+      if (custRes && custRes.ok) {
+        const cJson = await custRes.json();
+        if (Array.isArray(cJson.data)) {
+          setCustomers(cJson.data);
+          isConnected = true;
         }
-      } catch (e) {
-        console.warn('Direct cloud fetch warning:', e);
       }
 
-      // 2. Also check backend API in case MongoDB Atlas is active
-      let apiData = null;
-      try {
-        const [agentRes, custRes, leadRes, adminRes] = await Promise.all([
-          fetch('/api/agents?t=' + Date.now()).catch(() => null),
-          fetch('/api/customers?t=' + Date.now()).catch(() => null),
-          fetch('/api/leads?t=' + Date.now()).catch(() => null),
-          fetch('/api/admin?t=' + Date.now()).catch(() => null)
-        ]);
+      // 2. Leads strictly from MongoDB
+      if (leadRes && leadRes.ok) {
+        const lJson = await leadRes.json();
+        if (Array.isArray(lJson.data)) {
+          setLeads(lJson.data);
+          isConnected = true;
+        }
+      }
 
-        if (custRes && custRes.ok) {
-          const cJson = await custRes.json();
-          if (cJson.source === 'mongodb' && Array.isArray(cJson.data)) {
-            apiData = {
-              customers: cJson.data,
-              agents: agentRes && agentRes.ok ? (await agentRes.json()).data : null,
-              leads: leadRes && leadRes.ok ? (await leadRes.json()).data : null,
-              admin: adminRes && adminRes.ok ? (await adminRes.json()).data : null
-            };
-          }
+      // 3. Agents strictly from MongoDB
+      if (agentRes && agentRes.ok) {
+        const aJson = await agentRes.json();
+        if (Array.isArray(aJson.data)) {
+          setAgents(aJson.data);
+          isConnected = true;
         }
-      } catch (e) {}
+      }
 
-      // Prefer MongoDB if active, otherwise live Cloud Bin
-      const resolved = apiData || cloudData;
+      // 4. Admin Profile strictly from MongoDB
+      if (adminRes && adminRes.ok) {
+        const adJson = await adminRes.json();
+        if (adJson.data && (adJson.data.password || adJson.data.email)) {
+          setAdminProfile(adJson.data);
+        }
+      }
 
-      if (resolved) {
-        if (Array.isArray(resolved.customers)) {
-          setCustomers(resolved.customers);
-          try { localStorage.setItem('leadspro_customers', JSON.stringify(resolved.customers)); } catch {}
-        }
-        if (Array.isArray(resolved.agents)) {
-          setAgents(resolved.agents);
-          try { localStorage.setItem('leadspro_agents', JSON.stringify(resolved.agents)); } catch {}
-        }
-        if (Array.isArray(resolved.leads)) {
-          setLeads(resolved.leads);
-          try { localStorage.setItem('leadspro_leads', JSON.stringify(resolved.leads)); } catch {}
-        }
-        if (resolved.admin && (resolved.admin.password || resolved.admin.email)) {
-          setAdminProfile(resolved.admin);
-          try { localStorage.setItem('leadspro_admin_profile', JSON.stringify(resolved.admin)); } catch {}
-        }
+      let healthInfo = null;
+      if (healthRes && healthRes.ok) {
+        healthInfo = await healthRes.json();
       }
 
       setDbStatus({
-        connected: true,
-        mode: apiData ? 'mongodb' : 'cloud-sync',
-        message: 'Live Multi-Device Cloud Sync Active'
+        connected: isConnected,
+        mode: isConnected ? 'mongodb' : 'disconnected',
+        message: isConnected 
+          ? (healthInfo?.database || 'MongoDB Live Database Connected') 
+          : 'Connecting to MongoDB...'
       });
+
+      setIsLoading(false);
 
       if (isManual) {
         addToast({
-          title: 'Cloud Synchronized',
-          message: 'All records, team members, and PINs are live and synced across all devices.',
+          title: 'MongoDB Synchronized',
+          message: 'All records, pipeline leads, and team profiles fetched live from MongoDB.',
           type: 'success'
         });
       }
     } catch (err) {
-      console.warn('Sync error:', err);
+      console.warn('MongoDB sync error:', err);
+      setDbStatus({
+        connected: false,
+        mode: 'error',
+        message: 'MongoDB Connection Error: ' + err.message
+      });
+      setIsLoading(false);
     }
   }, [addToast]);
 
-  // Live Auto-Sync: Poll every 5 seconds + on window focus so any changes on PC 1 appear on PC 2
+  // Live Auto-Sync: Poll MongoDB every 6 seconds + on window focus
   useEffect(() => {
     syncWithBackend();
 
     const interval = setInterval(() => {
       syncWithBackend();
-    }, 5000);
+    }, 6000);
 
     const handleFocus = () => {
       syncWithBackend();
@@ -255,58 +166,44 @@ export const CrmProvider = ({ children }) => {
     };
   }, [syncWithBackend]);
 
-  // 1. BULK UPLOAD CUSTOMERS (Module 1)
+  // 1. BULK UPLOAD CUSTOMERS strictly to MongoDB
   const bulkUploadCustomers = useCallback(async (newRecords, fileName = 'Imported_File.xlsx') => {
-    const now = new Date();
-    const formattedDate = now.toISOString().split('T')[0];
-    
-    // Find highest existing CUST ID
-    const existingIds = customers.map(c => {
-      const num = parseInt(c.id.replace(/\D/g, ''), 10);
-      return isNaN(num) ? 1000 : num;
-    });
-    let nextNum = existingIds.length > 0 ? Math.max(...existingIds) + 1 : 1001;
-
-    const formattedRecords = newRecords.map((item) => {
-      const id = `CUST-${nextNum++}`;
-      return {
-        id,
-        name: item.name || 'Unnamed Corporate Account',
-        phone: item.phone || '0300-0000000',
-        email: item.email || `inquiry@${item.name.toLowerCase().replace(/[^a-z0-9]/g, '')}.com`,
-        source: item.source || 'Excel Bulk Import',
-        city: item.city || 'Karachi',
-        importedDate: formattedDate,
-        isAssigned: false,
-        assignedTo: null,
-        assignedAt: null
-      };
-    });
-
-    // Update local state and sync to cloud bin immediately
-    const nextCustomers = [...formattedRecords, ...customers];
-    setCustomers(nextCustomers);
-    pushToSharedCloud({ customers: nextCustomers });
-
-    // Send to backend API asynchronously
     try {
-      fetch('/api/customers/bulk', {
+      const res = await fetch('/api/customers/bulk', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ records: formattedRecords })
-      }).catch(() => {});
-    } catch {}
+        body: JSON.stringify({ records: newRecords })
+      });
 
-    addToast({
-      title: 'Bulk Data Ingested',
-      message: `Successfully uploaded ${formattedRecords.length} customer records from "${fileName}". Synced across devices.`,
-      type: 'success'
-    });
+      if (!res.ok) {
+        throw new Error(`Failed to upload to MongoDB (Status: ${res.status})`);
+      }
 
-    return formattedRecords;
-  }, [customers, pushToSharedCloud, addToast]);
+      const result = await res.json();
+      const savedRecords = Array.isArray(result.data) ? result.data : [];
 
-  // 2. ASSIGN CUSTOMERS TO AGENT (The Crucial Workflow)
+      // Update state with records saved to MongoDB
+      setCustomers(prev => [...savedRecords, ...prev]);
+
+      addToast({
+        title: 'Bulk Data Ingested',
+        message: `Successfully saved ${savedRecords.length} records to MongoDB from "${fileName}".`,
+        type: 'success'
+      });
+
+      return savedRecords;
+    } catch (err) {
+      console.error('MongoDB bulk upload error:', err);
+      addToast({
+        title: 'Upload Failed',
+        message: 'Could not write to MongoDB: ' + err.message,
+        type: 'error'
+      });
+      return [];
+    }
+  }, [addToast]);
+
+  // 2. ASSIGN CUSTOMERS TO AGENT strictly in MongoDB
   const assignCustomersToAgent = useCallback(async (customerIds, agentName) => {
     if (!customerIds || customerIds.length === 0) {
       addToast({
@@ -326,205 +223,188 @@ export const CrmProvider = ({ children }) => {
       return false;
     }
 
-    const now = new Date();
-    const formattedDate = now.toISOString().split('T')[0];
-    const formattedTime = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-
-    const customersToAssign = customers.filter(c => customerIds.includes(c.id));
-
-    // Update customers state
-    const nextCustomers = customers.map(c => {
-      if (customerIds.includes(c.id)) {
-        return {
-          ...c,
-          isAssigned: true,
-          assignedTo: agentName,
-          assignedAt: `${formattedDate} ${formattedTime}`
-        };
-      }
-      return c;
-    });
-
-    // Spawn corresponding Leads
-    const newLeads = customersToAssign.map((cust, idx) => {
-      const leadNum = 2000 + leads.length + idx + 1;
-      return {
-        id: `LEAD-${leadNum}`,
-        customerId: cust.id,
-        name: cust.name,
-        phone: cust.phone,
-        email: cust.email,
-        source: cust.source,
-        assignedAgent: agentName,
-        status: 'Pending',
-        notes: `Assigned to ${agentName} on ${formattedDate}. Awaiting first contact.`,
-        assignedDate: formattedDate,
-        lastContactDate: null
-      };
-    });
-
-    const nextLeads = [...newLeads, ...leads];
-
-    setCustomers(nextCustomers);
-    setLeads(nextLeads);
-    pushToSharedCloud({ customers: nextCustomers, leads: nextLeads });
-
-    // Send to backend API
     try {
-      fetch('/api/customers/assign', {
+      const res = await fetch('/api/customers/assign', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ customerIds, agentName })
-      }).catch(() => {});
-    } catch {}
+      });
 
-    addToast({
-      title: 'Workflow Assignment Complete',
-      message: `${customerIds.length} customer(s) successfully routed to ${agentName}. Synced across devices.`,
-      type: 'success'
-    });
+      if (!res.ok) {
+        throw new Error(`Failed to assign in MongoDB (Status: ${res.status})`);
+      }
 
-    return true;
-  }, [customers, leads, pushToSharedCloud, addToast]);
+      // Re-fetch fresh state from MongoDB
+      await syncWithBackend();
 
-  // 3. STATUS TRACKING & UPDATING (Module 2)
+      addToast({
+        title: 'Workflow Assignment Complete',
+        message: `${customerIds.length} customer(s) routed to ${agentName} in MongoDB pipeline.`,
+        type: 'success'
+      });
+
+      return true;
+    } catch (err) {
+      console.error('Assignment error:', err);
+      addToast({
+        title: 'Assignment Failed',
+        message: 'MongoDB update failed: ' + err.message,
+        type: 'error'
+      });
+      return false;
+    }
+  }, [syncWithBackend, addToast]);
+
+  // 3. STATUS TRACKING & UPDATING strictly in MongoDB
   const updateLeadStatus = useCallback(async (leadId, newStatus, note = '') => {
     let leadName = '';
 
-    const nextLeads = leads.map(lead => {
-      if (lead.id === leadId) {
-        leadName = lead.name;
-        const now = new Date();
-        const timestamp = `${now.toISOString().split('T')[0]} ${now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
-        
-        return {
-          ...lead,
-          status: newStatus,
-          lastContactDate: newStatus !== 'Pending' ? timestamp : lead.lastContactDate,
-          notes: note ? `${note} (Updated to ${newStatus})` : lead.notes
-        };
-      }
-      return lead;
+    setLeads(prevLeads => {
+      return prevLeads.map(lead => {
+        if (lead.id === leadId) {
+          leadName = lead.name;
+          const now = new Date();
+          const timestamp = `${now.toISOString().split('T')[0]} ${now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+          return {
+            ...lead,
+            status: newStatus,
+            lastContactDate: newStatus !== 'Pending' ? timestamp : lead.lastContactDate,
+            notes: note ? `${note} (Updated to ${newStatus})` : lead.notes
+          };
+        }
+        return lead;
+      });
     });
 
-    setLeads(nextLeads);
-    pushToSharedCloud({ leads: nextLeads });
-
-    // Send to backend API
     try {
-      fetch(`/api/leads/${leadId}/status`, {
+      const res = await fetch(`/api/leads/${leadId}/status`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: newStatus, notes: note })
-      }).catch(() => {});
-    } catch {}
+      });
 
-    addToast({
-      title: 'Pipeline Status Updated',
-      message: `"${leadName}" marked as "${newStatus}". Synced across devices.`,
-      type: newStatus === 'Interested' ? 'success' : newStatus === 'Not Interested' ? 'warning' : 'info'
-    });
-  }, [leads, pushToSharedCloud, addToast]);
+      if (!res.ok) {
+        throw new Error(`MongoDB status update failed (Status: ${res.status})`);
+      }
 
-  // 4. ADD SINGLE CUSTOMER MANUALLY
+      addToast({
+        title: 'Pipeline Status Updated',
+        message: `"${leadName}" marked as "${newStatus}" in MongoDB.`,
+        type: newStatus === 'Interested' ? 'success' : newStatus === 'Not Interested' ? 'warning' : 'info'
+      });
+    } catch (err) {
+      console.error('Lead status update error:', err);
+      addToast({
+        title: 'Update Error',
+        message: 'Could not update MongoDB: ' + err.message,
+        type: 'error'
+      });
+    }
+  }, [addToast]);
+
+  // 4. ADD SINGLE CUSTOMER MANUALLY strictly to MongoDB
   const addSingleCustomer = useCallback(async (customerData) => {
-    const existingIds = customers.map(c => {
-      const num = parseInt(c.id.replace(/\D/g, ''), 10);
-      return isNaN(num) ? 1000 : num;
-    });
-    const nextNum = existingIds.length > 0 ? Math.max(...existingIds) + 1 : 1001;
-
-    const newCust = {
-      id: `CUST-${nextNum}`,
-      name: customerData.name.trim(),
-      phone: customerData.phone.trim(),
-      email: customerData.email.trim(),
-      source: customerData.source || 'Direct Entry',
-      city: customerData.city || 'Karachi',
-      importedDate: new Date().toISOString().split('T')[0],
-      isAssigned: false,
-      assignedTo: null,
-      assignedAt: null
-    };
-
-    const nextCustomers = [newCust, ...customers];
-    setCustomers(nextCustomers);
-    pushToSharedCloud({ customers: nextCustomers });
-
-    // Send to API
     try {
-      fetch('/api/customers', {
+      const res = await fetch('/api/customers', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(newCust)
-      }).catch(() => {});
-    } catch {}
+        body: JSON.stringify(customerData)
+      });
 
-    addToast({
-      title: 'Customer Added',
-      message: `"${newCust.name}" added and synced across all devices.`,
-      type: 'success'
-    });
+      if (!res.ok) {
+        throw new Error(`Failed to save customer to MongoDB (Status: ${res.status})`);
+      }
 
-    return newCust;
-  }, [customers, pushToSharedCloud, addToast]);
+      const result = await res.json();
+      const newCust = result.data;
 
-  // 5. DELETE CUSTOMERS (Single or Bulk, including assigned & imported ones)
+      setCustomers(prev => [newCust, ...prev]);
+
+      addToast({
+        title: 'Customer Added',
+        message: `"${newCust.name}" persisted to MongoDB.`,
+        type: 'success'
+      });
+
+      return newCust;
+    } catch (err) {
+      console.error('Add customer error:', err);
+      addToast({
+        title: 'Save Failed',
+        message: 'Could not write to MongoDB: ' + err.message,
+        type: 'error'
+      });
+      return null;
+    }
+  }, [addToast]);
+
+  // 5. DELETE CUSTOMERS strictly in MongoDB
   const deleteCustomers = useCallback(async (customerIds) => {
     if (!customerIds || customerIds.length === 0) return;
 
-    // Filter out from customers state
-    const nextCustomers = customers.filter(c => !customerIds.includes(c.id));
-    const nextLeads = leads.filter(l => !customerIds.includes(l.customerId));
+    setCustomers(prev => prev.filter(c => !customerIds.includes(c.id)));
+    setLeads(prev => prev.filter(l => !customerIds.includes(l.customerId)));
 
-    setCustomers(nextCustomers);
-    setLeads(nextLeads);
-    pushToSharedCloud({ customers: nextCustomers, leads: nextLeads });
-
-    // Send to backend API
     try {
-      fetch('/api/customers/bulk', {
+      const res = await fetch('/api/customers/bulk', {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ customerIds })
-      }).catch(() => {});
-    } catch {}
+      });
 
-    addToast({
-      title: 'Deleted Successfully',
-      message: `Removed ${customerIds.length} customer record(s). Synced across all devices.`,
-      type: 'warning'
-    });
-  }, [customers, leads, pushToSharedCloud, addToast]);
+      if (!res.ok) {
+        throw new Error(`MongoDB delete failed (Status: ${res.status})`);
+      }
 
-  // 5b. DELETE ALL CUSTOMERS & LEADS (Full wipe of raw pool and pipeline)
+      addToast({
+        title: 'Deleted Successfully',
+        message: `Removed ${customerIds.length} customer record(s) from MongoDB.`,
+        type: 'warning'
+      });
+    } catch (err) {
+      console.error('Delete customers error:', err);
+      addToast({
+        title: 'Delete Failed',
+        message: 'Could not delete from MongoDB: ' + err.message,
+        type: 'error'
+      });
+    }
+  }, [addToast]);
+
+  // 5b. DELETE ALL CUSTOMERS & LEADS strictly in MongoDB
   const deleteAllCustomers = useCallback(async () => {
     setCustomers([]);
     setLeads([]);
-    pushToSharedCloud({ customers: [], leads: [] });
 
     try {
-      localStorage.setItem('leadspro_customers', JSON.stringify([]));
-      localStorage.setItem('leadspro_leads', JSON.stringify([]));
-      await fetch('/api/customers/all', {
+      const res = await fetch('/api/customers/all', {
         method: 'DELETE'
       });
-    } catch (e) {
-      console.warn('API error during deleteAllCustomers:', e);
+
+      if (!res.ok) {
+        throw new Error(`MongoDB clear failed (Status: ${res.status})`);
+      }
+
+      addToast({
+        title: 'Database Wiped',
+        message: 'All customer records and linked pipeline leads cleared from MongoDB.',
+        type: 'warning'
+      });
+    } catch (err) {
+      console.error('Wipe error:', err);
+      addToast({
+        title: 'Wipe Failed',
+        message: 'Could not wipe MongoDB: ' + err.message,
+        type: 'error'
+      });
     }
+  }, [addToast]);
 
-    addToast({
-      title: 'Database Wiped',
-      message: 'All customer records and linked pipeline leads have been deleted across all devices.',
-      type: 'warning'
-    });
-  }, [pushToSharedCloud, addToast]);
-
-  // 6. UNASSIGN CUSTOMERS
+  // 6. UNASSIGN CUSTOMERS strictly in MongoDB
   const unassignCustomers = useCallback(async (customerIds) => {
     if (!customerIds || customerIds.length === 0) return;
 
-    const nextCustomers = customers.map(c => {
+    setCustomers(prev => prev.map(c => {
       if (customerIds.includes(c.id)) {
         return {
           ...c,
@@ -534,49 +414,65 @@ export const CrmProvider = ({ children }) => {
         };
       }
       return c;
-    });
+    }));
 
-    const nextLeads = leads.filter(l => !customerIds.includes(l.customerId));
-
-    setCustomers(nextCustomers);
-    setLeads(nextLeads);
-    pushToSharedCloud({ customers: nextCustomers, leads: nextLeads });
+    setLeads(prev => prev.filter(l => !customerIds.includes(l.customerId)));
 
     try {
-      fetch('/api/customers/unassign', {
+      const res = await fetch('/api/customers/unassign', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ customerIds })
-      }).catch(() => {});
-    } catch {}
+      });
 
-    addToast({
-      title: 'Assignment Reverted',
-      message: `${customerIds.length} customer(s) returned to Unassigned Pool across devices.`,
-      type: 'info'
-    });
-  }, [customers, leads, pushToSharedCloud, addToast]);
+      if (!res.ok) {
+        throw new Error(`MongoDB unassign failed (Status: ${res.status})`);
+      }
 
-  // 7. DELETE SINGLE LEAD
+      addToast({
+        title: 'Assignment Reverted',
+        message: `${customerIds.length} customer(s) returned to Unassigned Pool in MongoDB.`,
+        type: 'info'
+      });
+    } catch (err) {
+      console.error('Unassign error:', err);
+      addToast({
+        title: 'Unassign Failed',
+        message: 'MongoDB update failed: ' + err.message,
+        type: 'error'
+      });
+    }
+  }, [addToast]);
+
+  // 7. DELETE SINGLE LEAD strictly in MongoDB
   const deleteLead = useCallback(async (leadId) => {
-    const nextLeads = leads.filter(l => l.id !== leadId);
-    setLeads(nextLeads);
-    pushToSharedCloud({ leads: nextLeads });
+    setLeads(prev => prev.filter(l => l.id !== leadId));
 
     try {
-      fetch(`/api/leads/${leadId}`, {
+      const res = await fetch(`/api/leads/${leadId}`, {
         method: 'DELETE'
-      }).catch(() => {});
-    } catch {}
+      });
 
-    addToast({
-      title: 'Lead Removed',
-      message: 'Lead removed from active pipeline across devices.',
-      type: 'warning'
-    });
-  }, [leads, pushToSharedCloud, addToast]);
+      if (!res.ok) {
+        throw new Error(`MongoDB lead delete failed (Status: ${res.status})`);
+      }
 
-  // 8. ADD NEW TEAM MEMBER
+      addToast({
+        title: 'Lead Removed',
+        message: 'Lead removed from active pipeline in MongoDB.',
+        type: 'warning'
+      });
+    } catch (err) {
+      console.error('Lead delete error:', err);
+      addToast({
+        title: 'Delete Failed',
+        message: 'Could not delete from MongoDB: ' + err.message,
+        type: 'error'
+      });
+    }
+  }, [addToast]);
+
+  // 8. ADD NEW TEAM MEMBER strictly to MongoDB
   const addAgent = useCallback(async (agentData) => {
     if (!agentData.name?.trim()) {
       addToast({
@@ -587,100 +483,72 @@ export const CrmProvider = ({ children }) => {
       return false;
     }
 
-    const nextId = agents.length > 0 ? Math.max(...agents.map(a => a.id)) + 1 : 1;
-    const nameTrimmed = agentData.name.trim();
-
-    const defaultAvatars = [
-      "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&auto=format&fit=crop&q=80",
-      "https://images.unsplash.com/photo-1570295999919-56ceb5ecca61?w=150&auto=format&fit=crop&q=80",
-      "https://images.unsplash.com/photo-1580489944761-15a19d654956?w=150&auto=format&fit=crop&q=80",
-      "https://images.unsplash.com/photo-1628157582853-a796fa650a6a?w=150&auto=format&fit=crop&q=80",
-      "https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=150&auto=format&fit=crop&q=80"
-    ];
-    const pickedAvatar = agentData.avatar || defaultAvatars[nextId % defaultAvatars.length];
-
-    const newAgent = {
-      id: nextId,
-      name: nameTrimmed,
-      role: agentData.role?.trim() || "Sales Representative",
-      email: agentData.email?.trim() || "",
-      phone: agentData.phone?.trim() || "",
-      avatar: pickedAvatar,
-      color: "blue",
-      pin: agentData.pin?.trim() || String(Math.floor(1000 + Math.random() * 9000))
-    };
-
-    const nextAgents = [...agents, newAgent];
-    setAgents(nextAgents);
-    pushToSharedCloud({ agents: nextAgents });
-
     try {
-      fetch('/api/agents', {
+      const res = await fetch('/api/agents', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(newAgent)
-      }).catch(() => {});
-    } catch {}
+        body: JSON.stringify(agentData)
+      });
 
-    addToast({
-      title: 'Team Member Added',
-      message: `${newAgent.name} (PIN: ${newAgent.pin}) added and synced across all devices.`,
-      type: 'success'
-    });
-
-    return newAgent;
-  }, [agents, pushToSharedCloud, addToast]);
-
-  // 9. UPDATE TEAM MEMBER
-  const updateAgent = useCallback(async (agentId, updatedData) => {
-    let oldName = '';
-    const newName = updatedData.name?.trim() || '';
-
-    const nextAgents = agents.map(agent => {
-      if (agent.id === agentId) {
-        oldName = agent.name;
-        return {
-          ...agent,
-          name: newName || agent.name,
-          role: updatedData.role?.trim() || agent.role,
-          email: updatedData.email?.trim() || agent.email,
-          phone: updatedData.phone?.trim() || agent.phone,
-          avatar: updatedData.avatar || agent.avatar,
-          pin: updatedData.pin !== undefined ? String(updatedData.pin).trim() : agent.pin
-        };
+      if (!res.ok) {
+        throw new Error(`Failed to create agent in MongoDB (Status: ${res.status})`);
       }
-      return agent;
-    });
 
-    let nextCustomers = customers;
-    let nextLeads = leads;
+      const result = await res.json();
+      const newAgent = result.data;
 
-    if (oldName && newName && oldName !== newName) {
-      nextCustomers = customers.map(c => c.assignedTo === oldName ? { ...c, assignedTo: newName } : c);
-      nextLeads = leads.map(l => l.assignedAgent === oldName ? { ...l, assignedAgent: newName } : l);
-      setCustomers(nextCustomers);
-      setLeads(nextLeads);
+      setAgents(prev => [...prev, newAgent]);
+
+      addToast({
+        title: 'Team Member Added',
+        message: `${newAgent.name} (PIN: ${newAgent.pin}) persisted to MongoDB.`,
+        type: 'success'
+      });
+
+      return newAgent;
+    } catch (err) {
+      console.error('Add agent error:', err);
+      addToast({
+        title: 'Creation Failed',
+        message: 'Could not write to MongoDB: ' + err.message,
+        type: 'error'
+      });
+      return null;
     }
+  }, [addToast]);
 
-    setAgents(nextAgents);
-    pushToSharedCloud({ agents: nextAgents, customers: nextCustomers, leads: nextLeads });
-
+  // 9. UPDATE TEAM MEMBER strictly in MongoDB
+  const updateAgent = useCallback(async (agentId, updatedData) => {
     try {
-      fetch(`/api/agents/${agentId}`, {
+      const res = await fetch(`/api/agents/${agentId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(updatedData)
-      }).catch(() => {});
-    } catch {}
+      });
 
-    addToast({
-      title: 'Team Member Updated',
-      message: `Profile details for ${newName || oldName} saved and synced to cloud.`,
-      type: 'success'
-    });
-  }, [agents, customers, leads, pushToSharedCloud, addToast]);
+      if (!res.ok) {
+        throw new Error(`Failed to update agent in MongoDB (Status: ${res.status})`);
+      }
 
-  // 9b. UPDATE AGENT PIN (Admin Setting)
+      // Re-fetch all to ensure relational updates (name changes in customer/leads) are fresh
+      await syncWithBackend();
+
+      addToast({
+        title: 'Team Member Updated',
+        message: 'Profile details saved to MongoDB.',
+        type: 'success'
+      });
+    } catch (err) {
+      console.error('Update agent error:', err);
+      addToast({
+        title: 'Update Failed',
+        message: 'MongoDB update failed: ' + err.message,
+        type: 'error'
+      });
+    }
+  }, [syncWithBackend, addToast]);
+
+  // 9b. UPDATE AGENT PIN strictly in MongoDB
   const updateAgentPin = useCallback(async (agentId, newPin) => {
     const pinStr = String(newPin).trim();
     if (!pinStr) {
@@ -693,62 +561,139 @@ export const CrmProvider = ({ children }) => {
     }
 
     let agentName = '';
-    const nextAgents = agents.map(a => {
+    setAgents(prev => prev.map(a => {
       if (String(a.id) === String(agentId)) {
         agentName = a.name;
         return { ...a, pin: pinStr };
       }
       return a;
-    });
+    }));
 
-    setAgents(nextAgents);
-    pushToSharedCloud({ agents: nextAgents });
-
-    // If currently logged in as this agent, update auth state
     setAuth(prev => (prev?.id === agentId ? { ...prev, pin: pinStr } : prev));
 
     try {
-      fetch(`/api/agents/${agentId}/pin`, {
+      const res = await fetch(`/api/agents/${agentId}/pin`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ pin: pinStr })
-      }).catch(() => {});
-    } catch {}
+      });
 
-    addToast({
-      title: 'PIN Assigned',
-      message: `New security PIN "${pinStr}" assigned to ${agentName}. Synced across all devices.`,
-      type: 'success'
-    });
-    return true;
-  }, [agents, pushToSharedCloud, addToast]);
+      if (!res.ok) {
+        throw new Error(`Failed to assign PIN in MongoDB (Status: ${res.status})`);
+      }
 
-  // 12. AUTHENTICATION (Dynamic Admin Login with Default Credentials, Agent PIN Login, Logout)
+      addToast({
+        title: 'PIN Assigned',
+        message: `New security PIN "${pinStr}" assigned to ${agentName} in MongoDB.`,
+        type: 'success'
+      });
+      return true;
+    } catch (err) {
+      console.error('PIN update error:', err);
+      addToast({
+        title: 'PIN Update Failed',
+        message: 'MongoDB PIN update failed: ' + err.message,
+        type: 'error'
+      });
+      return false;
+    }
+  }, [addToast]);
+
+  // 10. REMOVE TEAM MEMBER strictly from MongoDB
+  const removeAgent = useCallback(async (agentId) => {
+    const targetAgent = agents.find(a => a.id === agentId);
+    if (!targetAgent) return;
+
+    const agentName = targetAgent.name;
+
+    try {
+      const res = await fetch(`/api/agents/${agentId}`, {
+        method: 'DELETE'
+      });
+
+      if (!res.ok) {
+        throw new Error(`Failed to delete agent from MongoDB (Status: ${res.status})`);
+      }
+
+      await syncWithBackend();
+
+      addToast({
+        title: 'Member Removed from Team',
+        message: `${agentName} removed from MongoDB. Assigned leads returned to unassigned pool.`,
+        type: 'warning'
+      });
+    } catch (err) {
+      console.error('Delete agent error:', err);
+      addToast({
+        title: 'Removal Failed',
+        message: 'Could not delete from MongoDB: ' + err.message,
+        type: 'error'
+      });
+    }
+  }, [agents, syncWithBackend, addToast]);
+
+  // 11. UPDATE ADMIN PROFILE strictly in MongoDB
+  const updateAdminProfile = useCallback(async (updates) => {
+    try {
+      const res = await fetch('/api/admin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updates)
+      });
+
+      if (!res.ok) {
+        throw new Error(`Failed to update admin profile in MongoDB (Status: ${res.status})`);
+      }
+
+      const result = await res.json();
+      const updatedAdmin = result.data;
+      setAdminProfile(updatedAdmin);
+
+      setAuth(prev => {
+        if (prev?.type === 'admin') {
+          return {
+            ...prev,
+            name: updatedAdmin.name || prev.name,
+            email: updatedAdmin.email || prev.email
+          };
+        }
+        return prev;
+      });
+
+      addToast({
+        title: 'Admin Profile Updated',
+        message: 'Administrator details saved in MongoDB database.',
+        type: 'success'
+      });
+    } catch (err) {
+      console.error('Admin profile error:', err);
+      addToast({
+        title: 'Profile Update Failed',
+        message: 'Could not save to MongoDB: ' + err.message,
+        type: 'error'
+      });
+    }
+  }, [addToast]);
+
+  // 12. AUTHENTICATION (Admin Login, Agent PIN Login, Logout)
   const loginAdmin = useCallback((credentials) => {
     const enteredId = (credentials?.id || credentials?.email || '').trim().toLowerCase();
     const enteredPassword = (credentials?.password || '').trim();
     const enteredName = credentials?.name?.trim();
 
-    // Check if an admin profile already exists
-    let savedProfile = adminProfile || DEFAULT_ADMIN;
-    try {
-      const c = localStorage.getItem('leadspro_admin_profile');
-      if (c) savedProfile = JSON.parse(c);
-    } catch {}
+    const activeProfile = adminProfile || DEFAULT_ADMIN;
 
-    // Accepted default usernames/emails
     const validUsernames = [
       'admin',
       'admin@leadspro.com',
-      savedProfile?.username?.toLowerCase(),
-      savedProfile?.email?.toLowerCase()
+      activeProfile?.username?.toLowerCase(),
+      activeProfile?.email?.toLowerCase()
     ].filter(Boolean);
 
-    // Accepted default passwords
     const validPasswords = [
       'admin',
       'admin123',
-      savedProfile?.password
+      activeProfile?.password
     ].filter(Boolean);
 
     const isUserValid = !enteredId || validUsernames.some(u => u === enteredId || enteredId.includes(u) || u.includes(enteredId));
@@ -766,28 +711,15 @@ export const CrmProvider = ({ children }) => {
       return { success: false, message: msg };
     }
 
-    const finalName = enteredName || savedProfile?.name || 'Administrator';
-    const finalEmail = savedProfile?.email || 'admin@leadspro.com';
-
-    // If new name or first setup, persist profile
-    if (!savedProfile || enteredName) {
-      const newProf = {
-        name: finalName,
-        email: finalEmail,
-        username: 'admin',
-        password: enteredPassword || savedProfile?.password || 'admin',
-        updatedAt: new Date().toISOString()
-      };
-      setAdminProfile(newProf);
-      pushToSharedCloud({ admin: newProf });
-    }
+    const finalName = enteredName || activeProfile?.name || 'Administrator';
+    const finalEmail = activeProfile?.email || 'admin@leadspro.com';
 
     const adminUser = {
       type: 'admin',
       name: finalName,
       role: 'System Administrator',
       email: finalEmail,
-      avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80'
+      avatar: activeProfile?.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80'
     };
 
     setAuth(adminUser);
@@ -798,49 +730,14 @@ export const CrmProvider = ({ children }) => {
       type: 'success'
     });
     return { success: true };
-  }, [adminProfile, pushToSharedCloud, addToast]);
-
-  const updateAdminProfile = useCallback(async (updates) => {
-    const nextAdmin = { ...(adminProfile || DEFAULT_ADMIN), ...updates };
-    setAdminProfile(nextAdmin);
-    pushToSharedCloud({ admin: nextAdmin });
-
-    try {
-      fetch('/api/admin', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(nextAdmin)
-      }).catch(() => {});
-    } catch {}
-
-    setAuth(prev => {
-      if (prev?.type === 'admin') {
-        const nextAuth = {
-          ...prev,
-          name: updates.name || prev.name,
-          email: updates.email || prev.email
-        };
-        try {
-          localStorage.setItem('leadspro_auth', JSON.stringify(nextAuth));
-        } catch {}
-        return nextAuth;
-      }
-      return prev;
-    });
-
-    addToast({
-      title: 'Admin Profile Updated',
-      message: 'Your administrator profile details have been saved and synced to cloud.',
-      type: 'success'
-    });
-  }, [adminProfile, pushToSharedCloud, addToast]);
+  }, [adminProfile, addToast]);
 
   const loginAgentPin = useCallback((agentId, enteredPin) => {
     const targetAgent = agents.find(a => String(a.id) === String(agentId));
     if (!targetAgent) {
       addToast({
         title: 'Member Not Found',
-        message: 'Please select a valid team member.',
+        message: 'Please select a valid team member profile.',
         type: 'warning'
       });
       return { success: false, message: 'Agent not found' };
@@ -897,46 +794,7 @@ export const CrmProvider = ({ children }) => {
     });
   }, [addToast]);
 
-  // 10. REMOVE TEAM MEMBER
-  const removeAgent = useCallback(async (agentId) => {
-    const targetAgent = agents.find(a => a.id === agentId);
-    if (!targetAgent) return;
-
-    const agentName = targetAgent.name;
-
-    const nextAgents = agents.filter(a => a.id !== agentId);
-    const nextCustomers = customers.map(c => {
-      if (c.assignedTo === agentName) {
-        return {
-          ...c,
-          isAssigned: false,
-          assignedTo: null,
-          assignedAt: null
-        };
-      }
-      return c;
-    });
-    const nextLeads = leads.filter(l => l.assignedAgent !== agentName);
-
-    setAgents(nextAgents);
-    setCustomers(nextCustomers);
-    setLeads(nextLeads);
-    pushToSharedCloud({ agents: nextAgents, customers: nextCustomers, leads: nextLeads });
-
-    try {
-      fetch(`/api/agents/${agentId}`, {
-        method: 'DELETE'
-      }).catch(() => {});
-    } catch {}
-
-    addToast({
-      title: 'Member Removed from Team',
-      message: `${agentName} was removed. Their assigned leads were safely returned to the Unassigned Pool. Synced to cloud.`,
-      type: 'warning'
-    });
-  }, [agents, customers, leads, pushToSharedCloud, addToast]);
-
-  // 11. COMPUTED DASHBOARD & ANALYTICS METRICS
+  // 13. COMPUTED DASHBOARD & ANALYTICS METRICS (Directly from live MongoDB collections)
   const analytics = useMemo(() => {
     const totalCustomersPool = customers.length;
     const totalLeadsAssigned = leads.length;
@@ -1030,6 +888,7 @@ export const CrmProvider = ({ children }) => {
     analytics,
     statusConfig: LEAD_STATUS_CONFIG,
     syncNow: () => syncWithBackend(true),
+    isLoading,
     DEFAULT_ADMIN
   };
 

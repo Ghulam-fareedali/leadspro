@@ -152,16 +152,16 @@ export const LoginScreen = () => {
             type="button"
             onClick={() => syncNow()}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700/80 text-xs text-blue-300 transition-all cursor-pointer"
-            title="Sync Latest Data with Cloud"
+            title="Fetch Latest Data from MongoDB"
           >
             <RefreshCw className="w-3.5 h-3.5 text-blue-400" />
-            <span className="text-[11px] font-semibold">Sync Cloud</span>
+            <span className="text-[11px] font-semibold">Sync DB</span>
           </button>
 
           <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-800/80 border border-slate-700/80 text-xs">
-            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+            <span className={`w-2 h-2 rounded-full ${dbStatus?.connected ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'}`} />
             <span className="text-slate-300 text-[11px] font-semibold">
-              Live Cloud Active
+              {dbStatus?.connected ? 'MongoDB Live' : 'Connecting to DB...'}
             </span>
           </div>
         </div>

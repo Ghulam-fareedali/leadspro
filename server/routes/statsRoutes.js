@@ -2,34 +2,10 @@ import express from 'express';
 import { Customer } from '../models/Customer.js';
 import { Lead } from '../models/Lead.js';
 import { Agent } from '../models/Agent.js';
-import { INITIAL_AGENTS, INITIAL_CUSTOMERS, INITIAL_LEADS } from '../../src/data/customerData.js';
 
 const router = express.Router();
 
-// Fallback guard if MONGODB_URI is not yet configured
-router.use((req, res, next) => {
-  if (!process.env.MONGODB_URI) {
-    return res.json({ 
-      success: true, 
-      data: {
-        totalCustomersPool: 0,
-        totalLeadsAssigned: 0,
-        unassignedCount: 0,
-        assignedCustomersCount: 0,
-        pendingCount: 0,
-        connectedCount: 0,
-        interestedCount: 0,
-        notInterestedCount: 0,
-        interestRate: 0,
-        agentBreakdown: []
-      },
-      note: 'MONGODB_URI not configured'
-    });
-  }
-  next();
-});
-
-// GET aggregated stats for dashboard
+// GET aggregated stats strictly from MongoDB collections
 router.get('/', async (req, res) => {
   try {
     const totalCustomersPool = await Customer.countDocuments();
@@ -46,7 +22,11 @@ router.get('/', async (req, res) => {
       ? Math.round((interestedCount / totalLeadsAssigned) * 100)
       : 0;
 
-    // Agent breakdown
+    const contactRate = totalLeadsAssigned > 0
+      ? Math.round(((totalLeadsAssigned - pendingCount) / totalLeadsAssigned) * 100)
+      : 0;
+
+    // Real Agent pipeline breakdown from MongoDB
     const agents = await Agent.find().sort({ id: 1 });
     const agentBreakdown = await Promise.all(
       agents.map(async (agent) => {
@@ -76,6 +56,7 @@ router.get('/', async (req, res) => {
 
     res.json({
       success: true,
+      source: 'mongodb',
       data: {
         totalCustomersPool,
         totalLeadsAssigned,
@@ -86,36 +67,9 @@ router.get('/', async (req, res) => {
         interestedCount,
         notInterestedCount,
         interestRate,
+        contactRate,
         agentBreakdown
       }
-    });
-  } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
-  }
-});
-
-// POST seed initial data if collections are empty
-router.post('/seed', async (req, res) => {
-  try {
-    const agentCount = await Agent.countDocuments();
-    if (agentCount === 0) {
-      await Agent.insertMany(INITIAL_AGENTS);
-    }
-
-    const customerCount = await Customer.countDocuments();
-    if (customerCount === 0) {
-      await Customer.insertMany(INITIAL_CUSTOMERS);
-    }
-
-    const leadCount = await Lead.countDocuments();
-    if (leadCount === 0) {
-      await Lead.insertMany(INITIAL_LEADS);
-    }
-
-    res.json({
-      success: true,
-      message: 'Initial CRM data seeded successfully',
-      seeded: { agents: agentCount === 0, customers: customerCount === 0, leads: leadCount === 0 }
     });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });

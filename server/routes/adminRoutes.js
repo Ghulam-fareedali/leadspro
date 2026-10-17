@@ -1,5 +1,5 @@
 import express from 'express';
-import { getCloudData, saveCloudData } from '../config/cloudStorage.js';
+import { Admin } from '../models/Admin.js';
 
 const router = express.Router();
 
@@ -7,21 +7,28 @@ const DEFAULT_ADMIN = {
   email: 'admin@leadspro.com',
   username: 'admin',
   password: 'admin',
-  name: 'Admin'
+  name: 'Admin',
+  role: 'System Administrator'
 };
 
-// GET admin profile
+// GET admin profile from MongoDB
 router.get('/', async (req, res) => {
   try {
-    const cloudData = await getCloudData();
-    const admin = cloudData.admin || DEFAULT_ADMIN;
+    let admin = await Admin.findOne();
+    if (!admin) {
+      admin = await Admin.create(DEFAULT_ADMIN);
+    }
+
     res.json({
       success: true,
       data: {
-        email: admin.email || 'admin@leadspro.com',
-        username: admin.username || 'admin',
-        name: admin.name || 'Admin',
-        password: admin.password || 'admin'
+        id: admin._id,
+        email: admin.email,
+        username: admin.username,
+        name: admin.name,
+        role: admin.role,
+        password: admin.password,
+        avatar: admin.avatar
       }
     });
   } catch (err) {
@@ -29,23 +36,29 @@ router.get('/', async (req, res) => {
   }
 });
 
-// POST update admin profile
+// POST update admin profile in MongoDB
 router.post('/', async (req, res) => {
   try {
     const { name, email, username, password } = req.body;
-    const cloudData = await getCloudData();
 
-    cloudData.admin = {
-      name: name?.trim() || cloudData.admin?.name || 'Admin',
-      email: email?.trim() || cloudData.admin?.email || 'admin@leadspro.com',
-      username: username?.trim() || cloudData.admin?.username || 'admin',
-      password: password?.trim() || cloudData.admin?.password || 'admin',
-      updatedAt: new Date().toISOString()
+    const updateFields = {
+      ...(name ? { name: name.trim() } : {}),
+      ...(email ? { email: email.trim().toLowerCase() } : {}),
+      ...(username ? { username: username.trim().toLowerCase() } : {}),
+      ...(password ? { password: password.trim() } : {})
     };
 
-    await saveCloudData(cloudData);
+    let admin = await Admin.findOneAndUpdate(
+      {},
+      { $set: updateFields },
+      { new: true, upsert: true, setDefaultsOnInsert: true }
+    );
 
-    res.json({ success: true, message: 'Admin profile updated', data: cloudData.admin });
+    res.json({
+      success: true,
+      message: 'Admin profile updated successfully in MongoDB',
+      data: admin
+    });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }

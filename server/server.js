@@ -34,7 +34,7 @@ app.get('/api/health', (req, res) => {
   res.json({
     status: 'ok',
     timestamp: new Date().toISOString(),
-    database: isDbConnected ? 'MongoDB Configured' : 'Local In-Memory Mode',
+    database: isDbConnected ? 'MongoDB Live Connected' : 'MONGODB_URI Missing',
     mongodbUriSet: Boolean(process.env.MONGODB_URI)
   });
 });

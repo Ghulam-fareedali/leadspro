@@ -1,32 +1,24 @@
 import express from 'express';
 import { Lead } from '../models/Lead.js';
-import { getCloudData, saveCloudData } from '../config/cloudStorage.js';
 
 const router = express.Router();
 
-const isMongoActive = () => Boolean(process.env.MONGODB_URI);
-
-// GET all leads
+// GET all leads strictly from MongoDB
 router.get('/', async (req, res) => {
   try {
-    if (isMongoActive()) {
-      const leads = await Lead.find().sort({ createdAt: -1 });
-      return res.json({ success: true, count: leads.length, data: leads, source: 'mongodb' });
-    }
-
-    const cloudData = await getCloudData();
+    const leads = await Lead.find().sort({ createdAt: -1 });
     res.json({
       success: true,
-      count: cloudData.leads.length,
-      data: cloudData.leads,
-      source: 'cloud_sync'
+      count: leads.length,
+      data: leads,
+      source: 'mongodb'
     });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
 });
 
-// PUT update lead status
+// PUT update lead status strictly in MongoDB
 router.put('/:id/status', async (req, res) => {
   try {
     const { id } = req.params;
@@ -40,63 +32,47 @@ router.put('/:id/status', async (req, res) => {
     const now = new Date();
     const timestamp = `${now.toISOString().split('T')[0]} ${now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
 
-    if (isMongoActive()) {
-      const updateFields = {
-        status,
-        ...(status !== 'Pending' ? { lastContactDate: timestamp } : {}),
-        ...(notes ? { notes } : {})
-      };
+    const updateFields = {
+      status,
+      ...(status !== 'Pending' ? { lastContactDate: timestamp } : {}),
+      ...(notes ? { notes } : {})
+    };
 
-      const updated = await Lead.findOneAndUpdate(
-        { id },
-        { $set: updateFields },
-        { new: true }
-      );
+    const updated = await Lead.findOneAndUpdate(
+      { id },
+      { $set: updateFields },
+      { new: true }
+    );
 
-      if (!updated) return res.status(404).json({ success: false, error: 'Lead not found' });
-      return res.json({ success: true, data: updated });
+    if (!updated) {
+      return res.status(404).json({ success: false, error: 'Lead not found in MongoDB' });
     }
 
-    const cloudData = await getCloudData();
-    let found = false;
-
-    cloudData.leads = cloudData.leads.map(lead => {
-      if (lead.id === id) {
-        found = true;
-        return {
-          ...lead,
-          status,
-          ...(status !== 'Pending' ? { lastContactDate: timestamp } : {}),
-          ...(notes ? { notes } : {})
-        };
-      }
-      return lead;
-    });
-
-    if (!found) return res.status(404).json({ success: false, error: 'Lead not found' });
-
-    await saveCloudData(cloudData);
-    res.json({ success: true, message: 'Status updated' });
+    res.json({ success: true, message: 'Status updated in MongoDB', data: updated });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
 });
 
-// DELETE single lead
+// DELETE single lead strictly from MongoDB
 router.delete('/:id', async (req, res) => {
   try {
     const { id } = req.params;
-
-    if (isMongoActive()) {
-      await Lead.findOneAndDelete({ id });
-      return res.json({ success: true, message: 'Lead deleted' });
+    const deleted = await Lead.findOneAndDelete({ id });
+    if (!deleted) {
+      return res.status(404).json({ success: false, error: 'Lead not found' });
     }
+    res.json({ success: true, message: `Lead ${id} deleted from MongoDB` });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
 
-    const cloudData = await getCloudData();
-    cloudData.leads = cloudData.leads.filter(l => l.id !== id);
-    await saveCloudData(cloudData);
-
-    res.json({ success: true, message: 'Lead deleted' });
+// DELETE all leads strictly from MongoDB
+router.delete('/', async (req, res) => {
+  try {
+    await Lead.deleteMany({});
+    res.json({ success: true, message: 'All leads deleted from MongoDB' });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }

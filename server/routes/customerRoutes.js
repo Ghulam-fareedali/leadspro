@@ -1,73 +1,45 @@
 import express from 'express';
 import { Customer } from '../models/Customer.js';
 import { Lead } from '../models/Lead.js';
-import { getCloudData, saveCloudData } from '../config/cloudStorage.js';
 
 const router = express.Router();
 
-const isMongoActive = () => Boolean(process.env.MONGODB_URI);
-
-// GET all customers
+// GET all customers strictly from MongoDB
 router.get('/', async (req, res) => {
   try {
-    if (isMongoActive()) {
-      const customers = await Customer.find().sort({ createdAt: -1 });
-      return res.json({ success: true, count: customers.length, data: customers, source: 'mongodb' });
-    }
-
-    const cloudData = await getCloudData();
+    const customers = await Customer.find().sort({ createdAt: -1 });
     res.json({
       success: true,
-      count: cloudData.customers.length,
-      data: cloudData.customers,
-      source: 'cloud_sync'
+      count: customers.length,
+      data: customers,
+      source: 'mongodb'
     });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
 });
 
-// POST single customer
+// POST single customer strictly to MongoDB
 router.post('/', async (req, res) => {
   try {
     const { name, phone, email, source, city } = req.body;
     const today = new Date().toISOString().split('T')[0];
 
-    if (isMongoActive()) {
-      const count = await Customer.countDocuments();
-      const id = `CUST-${1001 + count}`;
-      const newCustomer = await Customer.create({
-        id,
-        name: name || 'Unnamed Account',
-        phone: phone || '0300-0000000',
-        email: email || '',
-        source: source || 'Direct Entry',
-        city: city || 'Karachi',
-        importedDate: today,
-        isAssigned: false,
-        assignedTo: null,
-        assignedAt: null
-      });
-      return res.status(201).json({ success: true, data: newCustomer });
-    }
+    const count = await Customer.countDocuments();
+    const id = `CUST-${1001 + count}`;
 
-    const cloudData = await getCloudData();
-    const id = `CUST-${1001 + cloudData.customers.length}`;
-    const newCustomer = {
+    const newCustomer = await Customer.create({
       id,
-      name: name || 'Unnamed Account',
-      phone: phone || '0300-0000000',
-      email: email || '',
+      name: name ? name.trim() : 'Unnamed Account',
+      phone: phone ? phone.trim() : '0300-0000000',
+      email: email ? email.trim() : '',
       source: source || 'Direct Entry',
       city: city || 'Karachi',
       importedDate: today,
       isAssigned: false,
       assignedTo: null,
       assignedAt: null
-    };
-
-    cloudData.customers.unshift(newCustomer);
-    await saveCloudData(cloudData);
+    });
 
     res.status(201).json({ success: true, data: newCustomer });
   } catch (err) {
@@ -75,7 +47,7 @@ router.post('/', async (req, res) => {
   }
 });
 
-// POST bulk upload (from Excel)
+// POST bulk upload (from Excel) strictly to MongoDB
 router.post('/bulk', async (req, res) => {
   try {
     const { records } = req.body;
@@ -84,35 +56,14 @@ router.post('/bulk', async (req, res) => {
     }
 
     const today = new Date().toISOString().split('T')[0];
-
-    if (isMongoActive()) {
-      const currentCount = await Customer.countDocuments();
-      let nextNum = 1001 + currentCount;
-      const toInsert = records.map(rec => ({
-        id: `CUST-${nextNum++}`,
-        name: rec.name || 'Unnamed Corporate Account',
-        phone: rec.phone || '0300-0000000',
-        email: rec.email || '',
-        source: rec.source || 'Excel File Upload',
-        city: rec.city || 'Karachi',
-        importedDate: today,
-        isAssigned: false,
-        assignedTo: null,
-        assignedAt: null
-      }));
-
-      const inserted = await Customer.insertMany(toInsert);
-      return res.status(201).json({ success: true, count: inserted.length, data: inserted });
-    }
-
-    const cloudData = await getCloudData();
-    let nextNum = 1001 + cloudData.customers.length;
+    const currentCount = await Customer.countDocuments();
+    let nextNum = 1001 + currentCount;
 
     const toInsert = records.map(rec => ({
       id: `CUST-${nextNum++}`,
-      name: rec.name || 'Unnamed Corporate Account',
-      phone: rec.phone || '0300-0000000',
-      email: rec.email || '',
+      name: rec.name ? rec.name.trim() : 'Unnamed Corporate Account',
+      phone: rec.phone ? rec.phone.trim() : '0300-0000000',
+      email: rec.email ? rec.email.trim() : '',
       source: rec.source || 'Excel File Upload',
       city: rec.city || 'Karachi',
       importedDate: today,
@@ -121,16 +72,14 @@ router.post('/bulk', async (req, res) => {
       assignedAt: null
     }));
 
-    cloudData.customers = [...toInsert, ...cloudData.customers];
-    await saveCloudData(cloudData);
-
-    res.status(201).json({ success: true, count: toInsert.length, data: toInsert });
+    const inserted = await Customer.insertMany(toInsert);
+    res.status(201).json({ success: true, count: inserted.length, data: inserted });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
 });
 
-// POST assign customers to agent -> creates Leads with status "Pending"
+// POST assign customers to agent -> updates Customers and creates Leads in MongoDB
 router.post('/assign', async (req, res) => {
   try {
     const { customerIds, agentName } = req.body;
@@ -145,82 +94,52 @@ router.post('/assign', async (req, res) => {
     const formattedDate = now.toISOString().split('T')[0];
     const formattedTime = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
-    if (isMongoActive()) {
-      await Customer.updateMany(
-        { id: { $in: customerIds } },
-        {
-          $set: {
-            isAssigned: true,
-            assignedTo: agentName,
-            assignedAt: `${formattedDate} ${formattedTime}`
-          }
-        }
-      );
-
-      const assignedCustomers = await Customer.find({ id: { $in: customerIds } });
-      const currentLeadCount = await Lead.countDocuments();
-      let leadNum = 2001 + currentLeadCount;
-
-      const newLeads = assignedCustomers.map(cust => ({
-        id: `LEAD-${leadNum++}`,
-        customerId: cust.id,
-        name: cust.name,
-        phone: cust.phone,
-        email: cust.email,
-        source: cust.source,
-        assignedAgent: agentName,
-        status: 'Pending',
-        notes: `Assigned to ${agentName} on ${formattedDate}.`,
-        assignedDate: formattedDate,
-        lastContactDate: null
-      }));
-
-      await Lead.insertMany(newLeads);
-      return res.json({ success: true, message: `${customerIds.length} customer(s) assigned to ${agentName}`, count: customerIds.length });
-    }
-
-    const cloudData = await getCloudData();
-    let leadNum = 2001 + cloudData.leads.length;
-    const createdLeads = [];
-
-    cloudData.customers = cloudData.customers.map(c => {
-      if (customerIds.includes(c.id)) {
-        const updated = {
-          ...c,
+    // 1. Update Customers in MongoDB
+    await Customer.updateMany(
+      { id: { $in: customerIds } },
+      {
+        $set: {
           isAssigned: true,
           assignedTo: agentName,
           assignedAt: `${formattedDate} ${formattedTime}`
-        };
-
-        createdLeads.push({
-          id: `LEAD-${leadNum++}`,
-          customerId: c.id,
-          name: c.name,
-          phone: c.phone,
-          email: c.email,
-          source: c.source,
-          assignedAgent: agentName,
-          status: 'Pending',
-          notes: `Assigned to ${agentName} on ${formattedDate}.`,
-          assignedDate: formattedDate,
-          lastContactDate: null
-        });
-
-        return updated;
+        }
       }
-      return c;
+    );
+
+    // 2. Query updated customer records
+    const assignedCustomers = await Customer.find({ id: { $in: customerIds } });
+    const currentLeadCount = await Lead.countDocuments();
+    let leadNum = 2001 + currentLeadCount;
+
+    // 3. Create linked Leads in MongoDB
+    const newLeads = assignedCustomers.map(cust => ({
+      id: `LEAD-${leadNum++}`,
+      customerId: cust.id,
+      name: cust.name,
+      phone: cust.phone,
+      email: cust.email,
+      source: cust.source,
+      assignedAgent: agentName,
+      status: 'Pending',
+      notes: `Assigned to ${agentName} on ${formattedDate}.`,
+      assignedDate: formattedDate,
+      lastContactDate: null
+    }));
+
+    const insertedLeads = await Lead.insertMany(newLeads);
+
+    res.json({
+      success: true,
+      message: `${customerIds.length} customer(s) assigned to ${agentName}`,
+      count: customerIds.length,
+      leads: insertedLeads
     });
-
-    cloudData.leads = [...createdLeads, ...cloudData.leads];
-    await saveCloudData(cloudData);
-
-    res.json({ success: true, message: `${customerIds.length} customer(s) assigned to ${agentName}`, count: customerIds.length });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
 });
 
-// POST unassign customers back to pool
+// POST unassign customers back to raw pool in MongoDB
 router.post('/unassign', async (req, res) => {
   try {
     const { customerIds } = req.body;
@@ -228,25 +147,12 @@ router.post('/unassign', async (req, res) => {
       return res.status(400).json({ success: false, error: 'customerIds array required' });
     }
 
-    if (isMongoActive()) {
-      await Customer.updateMany(
-        { id: { $in: customerIds } },
-        { $set: { isAssigned: false, assignedTo: null, assignedAt: null } }
-      );
-      await Lead.deleteMany({ customerId: { $in: customerIds } });
-      return res.json({ success: true, message: `${customerIds.length} customer(s) returned to pool` });
-    }
+    await Customer.updateMany(
+      { id: { $in: customerIds } },
+      { $set: { isAssigned: false, assignedTo: null, assignedAt: null } }
+    );
 
-    const cloudData = await getCloudData();
-    cloudData.customers = cloudData.customers.map(c => {
-      if (customerIds.includes(c.id)) {
-        return { ...c, isAssigned: false, assignedTo: null, assignedAt: null };
-      }
-      return c;
-    });
-
-    cloudData.leads = cloudData.leads.filter(l => !customerIds.includes(l.customerId));
-    await saveCloudData(cloudData);
+    await Lead.deleteMany({ customerId: { $in: customerIds } });
 
     res.json({ success: true, message: `${customerIds.length} customer(s) returned to pool` });
   } catch (err) {
@@ -254,35 +160,21 @@ router.post('/unassign', async (req, res) => {
   }
 });
 
-// DELETE bulk customers (or delete all)
+// DELETE bulk customers (or delete all) strictly in MongoDB
 router.delete('/bulk', async (req, res) => {
   try {
     const { customerIds, all } = req.body;
 
-    if (isMongoActive()) {
-      if (all) {
-        await Customer.deleteMany({});
-        await Lead.deleteMany({});
-        return res.json({ success: true, message: 'All customers and linked leads deleted' });
-      }
+    if (all) {
+      await Customer.deleteMany({});
+      await Lead.deleteMany({});
+      return res.json({ success: true, message: 'All customers and linked leads deleted from MongoDB' });
+    }
+
+    if (Array.isArray(customerIds) && customerIds.length > 0) {
       await Customer.deleteMany({ id: { $in: customerIds } });
       await Lead.deleteMany({ customerId: { $in: customerIds } });
-      return res.json({ success: true, message: 'Selected customers deleted' });
-    }
-
-    const cloudData = await getCloudData();
-    if (all) {
-      cloudData.customers = [];
-      cloudData.leads = [];
-      await saveCloudData(cloudData);
-      return res.json({ success: true, message: 'All customers and linked leads deleted' });
-    }
-
-    if (Array.isArray(customerIds)) {
-      cloudData.customers = cloudData.customers.filter(c => !customerIds.includes(c.id));
-      cloudData.leads = cloudData.leads.filter(l => !customerIds.includes(l.customerId));
-      await saveCloudData(cloudData);
-      return res.json({ success: true, message: 'Selected customers deleted' });
+      return res.json({ success: true, message: 'Selected customers deleted from MongoDB' });
     }
 
     res.json({ success: true });
@@ -291,23 +183,24 @@ router.delete('/bulk', async (req, res) => {
   }
 });
 
-// DELETE single customer
+// DELETE all customers and leads
+router.delete('/all', async (req, res) => {
+  try {
+    await Customer.deleteMany({});
+    await Lead.deleteMany({});
+    res.json({ success: true, message: 'All customers and linked leads cleared from MongoDB' });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// DELETE single customer strictly from MongoDB
 router.delete('/:id', async (req, res) => {
   try {
     const { id } = req.params;
-
-    if (isMongoActive()) {
-      await Customer.findOneAndDelete({ id });
-      await Lead.deleteMany({ customerId: id });
-      return res.json({ success: true, message: `Customer ${id} deleted` });
-    }
-
-    const cloudData = await getCloudData();
-    cloudData.customers = cloudData.customers.filter(c => c.id !== id);
-    cloudData.leads = cloudData.leads.filter(l => l.customerId !== id);
-    await saveCloudData(cloudData);
-
-    res.json({ success: true, message: `Customer ${id} deleted` });
+    await Customer.findOneAndDelete({ id });
+    await Lead.deleteMany({ customerId: id });
+    res.json({ success: true, message: `Customer ${id} and linked leads deleted from MongoDB` });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
