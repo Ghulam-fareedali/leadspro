@@ -139,11 +139,11 @@ export const LeadDetailsModal = ({ lead, isOpen, onClose, onStartCall }) => {
                 onChange={(e) => updateLeadStatus(lead.id, e.target.value)}
                 className="bg-white border border-slate-200 rounded-lg px-2.5 py-1 text-xs font-semibold text-slate-800 shadow-xs focus:ring-2 focus:ring-blue-500/20"
               >
-                <option value="Pending">Pending (Not Called)</option>
-                <option value="Call Done">Call Done</option>
-                <option value="Follow-up">Follow-up</option>
-                <option value="Converted">Converted</option>
-                <option value="Dead">Dead</option>
+                <option value="Pending">1. Pending (Awaiting Outreach)</option>
+                <option value="Connected">2. Connected (Contact Made)</option>
+                <option value="Interested">3. Interested (Hot Lead 🔥)</option>
+                <option value="Not Interested">4. Not Interested (Dead Lead ✕)</option>
+                <option value="Not on WhatsApp">5. Not on WhatsApp (📵)</option>
               </select>
             </div>
 

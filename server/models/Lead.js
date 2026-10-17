@@ -36,7 +36,7 @@ const leadSchema = new mongoose.Schema({
   },
   status: {
     type: String,
-    enum: ['Pending', 'Connected', 'Interested', 'Not Interested'],
+    enum: ['Pending', 'Connected', 'Interested', 'Not Interested', 'Not on WhatsApp'],
     default: 'Pending',
     index: true
   },

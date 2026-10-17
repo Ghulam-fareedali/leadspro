@@ -17,7 +17,8 @@ import {
   Sparkles,
   PieChart,
   BarChart3,
-  Inbox
+  Inbox,
+  PhoneOff
 } from 'lucide-react';
 
 export const DashboardModule = ({ onOpenUpload }) => {
@@ -84,6 +85,21 @@ export const DashboardModule = ({ onOpenUpload }) => {
         badgeBg: 'bg-rose-100 text-rose-800',
         barBg: 'bg-rose-500',
         sub: 'Declined or disqualified. Removed from active pipeline.'
+      }
+    },
+    {
+      key: 'Not on WhatsApp',
+      name: 'Not on WhatsApp',
+      count: analytics.notOnWhatsAppCount,
+      percentage: analytics.statusPercentages['Not on WhatsApp'],
+      icon: PhoneOff,
+      theme: {
+        cardBg: 'bg-slate-100/60',
+        borderColor: 'border-slate-300',
+        textColor: 'text-slate-800',
+        badgeBg: 'bg-slate-200 text-slate-800',
+        barBg: 'bg-slate-500',
+        sub: 'Not registered on WhatsApp. Call directly via regular cellular dialer.'
       }
     }
   ];
@@ -284,10 +300,17 @@ export const DashboardModule = ({ onOpenUpload }) => {
                 title={`Not Interested: ${analytics.notInterestedCount} (${analytics.statusPercentages['Not Interested']}%)`}
               />
             )}
+            {analytics.notOnWhatsAppCount > 0 && (
+              <div
+                style={{ width: `${(analytics.notOnWhatsAppCount / total) * 100}%` }}
+                className="bg-slate-500 h-full transition-all duration-500 hover:opacity-90 relative group"
+                title={`Not on WhatsApp: ${analytics.notOnWhatsAppCount} (${analytics.statusPercentages['Not on WhatsApp']}%)`}
+              />
+            )}
           </div>
 
           {/* Bar Legend */}
-          <div className="flex flex-wrap items-center gap-4 pt-1 text-xs text-slate-600">
+          <div className="flex flex-wrap items-center gap-3 sm:gap-4 pt-1 text-xs text-slate-600">
             <span className="flex items-center gap-1.5">
               <span className="w-2.5 h-2.5 rounded-full bg-amber-400" />
               <span>Pending ({analytics.statusPercentages.Pending}%)</span>
@@ -304,11 +327,15 @@ export const DashboardModule = ({ onOpenUpload }) => {
               <span className="w-2.5 h-2.5 rounded-full bg-rose-500" />
               <span>Not Interested ({analytics.statusPercentages['Not Interested']}%)</span>
             </span>
+            <span className="flex items-center gap-1.5">
+              <span className="w-2.5 h-2.5 rounded-full bg-slate-500" />
+              <span>Not on WhatsApp ({analytics.statusPercentages['Not on WhatsApp']}%)</span>
+            </span>
           </div>
         </div>
 
-        {/* 4 Status Cards Grid (2-col mobile, 4-col desktop) */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-4 pt-1">
+        {/* 5 Status Cards Grid (2-col mobile, 5-col desktop) */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5 sm:gap-3 pt-1">
           {statuses.map((st) => {
             const Icon = st.icon;
             return (
@@ -384,6 +411,7 @@ export const DashboardModule = ({ onOpenUpload }) => {
                 <th className="py-3 px-3 text-blue-700">2. Connected</th>
                 <th className="py-3 px-3 text-emerald-700">3. Interested (Hot)</th>
                 <th className="py-3 px-3 text-rose-700">4. Not Interested</th>
+                <th className="py-3 px-3 text-slate-700">5. 📵 Not on WA</th>
                 <th className="py-3 px-4 text-right">Interest Rate</th>
               </tr>
             </thead>
@@ -422,6 +450,10 @@ export const DashboardModule = ({ onOpenUpload }) => {
 
                   <td className="py-3 px-3 font-semibold text-slate-400">
                     {agent.notInterested}
+                  </td>
+
+                  <td className="py-3 px-3 font-semibold text-slate-600">
+                    {agent.notOnWhatsApp || 0}
                   </td>
 
                   <td className="py-3 px-4 text-right">

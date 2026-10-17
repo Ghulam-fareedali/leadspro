@@ -1,12 +1,13 @@
 import React from 'react';
 import { LEAD_STATUS_CONFIG } from '../data/customerData';
-import { Clock, PhoneCall, CheckCircle2, XCircle, UserCheck, Inbox } from 'lucide-react';
+import { Clock, PhoneCall, CheckCircle2, XCircle, UserCheck, Inbox, PhoneOff } from 'lucide-react';
 
 const STATUS_ICONS = {
   Pending: Clock,
   Connected: PhoneCall,
   Interested: CheckCircle2,
   'Not Interested': XCircle,
+  'Not on WhatsApp': PhoneOff,
 };
 
 export const StatusBadge = ({ status, size = 'md' }) => {

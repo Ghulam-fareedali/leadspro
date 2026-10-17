@@ -24,7 +24,7 @@ router.put('/:id/status', async (req, res) => {
     const { id } = req.params;
     const { status, notes } = req.body;
 
-    const validStatuses = ['Pending', 'Connected', 'Interested', 'Not Interested'];
+    const validStatuses = ['Pending', 'Connected', 'Interested', 'Not Interested', 'Not on WhatsApp'];
     if (!validStatuses.includes(status)) {
       return res.status(400).json({ success: false, error: `Invalid status: ${status}` });
     }

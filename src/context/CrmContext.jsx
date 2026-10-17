@@ -816,6 +816,7 @@ export const CrmProvider = ({ children }) => {
     const connectedCount = leads.filter(l => l.status === 'Connected').length;
     const interestedCount = leads.filter(l => l.status === 'Interested').length;
     const notInterestedCount = leads.filter(l => l.status === 'Not Interested').length;
+    const notOnWhatsAppCount = leads.filter(l => l.status === 'Not on WhatsApp').length;
 
     const interestRate = totalLeadsAssigned > 0 
       ? Math.round((interestedCount / totalLeadsAssigned) * 100) 
@@ -830,6 +831,7 @@ export const CrmProvider = ({ children }) => {
       Connected: totalLeadsAssigned > 0 ? Math.round((connectedCount / totalLeadsAssigned) * 100) : 0,
       Interested: totalLeadsAssigned > 0 ? Math.round((interestedCount / totalLeadsAssigned) * 100) : 0,
       'Not Interested': totalLeadsAssigned > 0 ? Math.round((notInterestedCount / totalLeadsAssigned) * 100) : 0,
+      'Not on WhatsApp': totalLeadsAssigned > 0 ? Math.round((notOnWhatsAppCount / totalLeadsAssigned) * 100) : 0,
     };
 
     const agentBreakdown = agents.map(agent => {
@@ -839,6 +841,7 @@ export const CrmProvider = ({ children }) => {
       const connected = agentLeads.filter(l => l.status === 'Connected').length;
       const interested = agentLeads.filter(l => l.status === 'Interested').length;
       const notInterested = agentLeads.filter(l => l.status === 'Not Interested').length;
+      const notOnWhatsApp = agentLeads.filter(l => l.status === 'Not on WhatsApp').length;
       const conversionRate = total > 0 ? Math.round((interested / total) * 100) : 0;
 
       return {
@@ -848,6 +851,7 @@ export const CrmProvider = ({ children }) => {
         connected,
         interested,
         notInterested,
+        notOnWhatsApp,
         conversionRate
       };
     });
@@ -861,6 +865,7 @@ export const CrmProvider = ({ children }) => {
       connectedCount,
       interestedCount,
       notInterestedCount,
+      notOnWhatsAppCount,
       interestRate,
       contactRate,
       statusPercentages,

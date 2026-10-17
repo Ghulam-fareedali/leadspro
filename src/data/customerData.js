@@ -42,6 +42,16 @@ export const LEAD_STATUS_CONFIG = {
     bgLight: "bg-rose-50",
     borderClass: "border-rose-200",
     description: "Dead lead; declined offer or disqualified."
+  },
+  "Not on WhatsApp": {
+    label: "Not on WhatsApp",
+    badgeClass: "bg-slate-100 text-slate-700 border-slate-300 ring-slate-400/10",
+    dotClass: "bg-slate-500",
+    barColor: "bg-slate-500",
+    textColor: "text-slate-700",
+    bgLight: "bg-slate-50",
+    borderClass: "border-slate-300",
+    description: "Number is not registered on WhatsApp. Call directly via regular phone dialer."
   }
 };
 
