@@ -141,9 +141,10 @@ export const LeadDetailsModal = ({ lead, isOpen, onClose, onStartCall }) => {
               >
                 <option value="Pending">1. Pending (Awaiting Outreach)</option>
                 <option value="Connected">2. Connected (Contact Made)</option>
-                <option value="Interested">3. Interested (Hot Lead 🔥)</option>
-                <option value="Not Interested">4. Not Interested (Dead Lead ✕)</option>
-                <option value="Not on WhatsApp">5. Not on WhatsApp (📵)</option>
+                <option value="Not Connected">3. Not Connected (Call Did Not Connect)</option>
+                <option value="Interested">4. Interested (Hot Lead 🔥)</option>
+                <option value="Not Interested">5. Not Interested (Dead Lead ✕)</option>
+                <option value="Not on WhatsApp">6. Not on WhatsApp (📵)</option>
               </select>
             </div>
 

@@ -23,6 +23,16 @@ export const LEAD_STATUS_CONFIG = {
     borderClass: "border-blue-200",
     description: "Agent has made contact; discussion ongoing, no final decision yet."
   },
+  "Not Connected": {
+    label: "Not Connected",
+    badgeClass: "bg-orange-50 text-orange-700 border-orange-200 ring-orange-500/10",
+    dotClass: "bg-orange-500",
+    barColor: "bg-orange-500",
+    textColor: "text-orange-700",
+    bgLight: "bg-orange-50",
+    borderClass: "border-orange-200",
+    description: "Call placed but did not connect (no answer, busy, or unreachable). Ready for callback."
+  },
   Interested: {
     label: "Interested",
     badgeClass: "bg-emerald-50 text-emerald-700 border-emerald-200 ring-emerald-500/10",

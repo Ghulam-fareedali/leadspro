@@ -151,8 +151,8 @@ export const CallModal = ({ lead, isOpen, onClose }) => {
             <label className="block text-xs font-semibold text-slate-700 mb-1.5">
               Call Outcome & Status Update <span className="text-rose-500">*</span>
             </label>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-              {['Call Done', 'Follow-up', 'Converted', 'Dead'].map((st) => (
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+              {['Call Done', 'Not Connected', 'Follow-up', 'Converted', 'Dead'].map((st) => (
                 <button
                   key={st}
                   type="button"

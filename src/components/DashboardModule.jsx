@@ -18,7 +18,8 @@ import {
   PieChart,
   BarChart3,
   Inbox,
-  PhoneOff
+  PhoneOff,
+  PhoneMissed
 } from 'lucide-react';
 
 export const DashboardModule = ({ onOpenUpload }) => {
@@ -55,6 +56,21 @@ export const DashboardModule = ({ onOpenUpload }) => {
         badgeBg: 'bg-blue-100 text-blue-800',
         barBg: 'bg-blue-500',
         sub: 'Contact established. Active discovery or negotiation.'
+      }
+    },
+    {
+      key: 'Not Connected',
+      name: 'Not Connected',
+      count: analytics.notConnectedCount || 0,
+      percentage: analytics.statusPercentages['Not Connected'] || 0,
+      icon: PhoneMissed,
+      theme: {
+        cardBg: 'bg-orange-50/40',
+        borderColor: 'border-orange-200',
+        textColor: 'text-orange-800',
+        badgeBg: 'bg-orange-100 text-orange-800',
+        barBg: 'bg-orange-500',
+        sub: 'Call placed but not answered or busy. Scheduled for redial.'
       }
     },
     {
@@ -251,7 +267,7 @@ export const DashboardModule = ({ onOpenUpload }) => {
               </span>
             </div>
             <p className="text-xs text-slate-500 mt-0.5">
-              Live status distribution across all 4 stages: Pending, Connected, Interested, and Not Interested.
+              Live status distribution across all stages: Pending, Connected, Not Connected, Interested, and Not Interested.
             </p>
           </div>
 
@@ -284,6 +300,13 @@ export const DashboardModule = ({ onOpenUpload }) => {
                 style={{ width: `${(analytics.connectedCount / total) * 100}%` }}
                 className="bg-blue-500 h-full transition-all duration-500 hover:opacity-90 relative group"
                 title={`Connected: ${analytics.connectedCount} (${analytics.statusPercentages.Connected}%)`}
+              />
+            )}
+            {analytics.notConnectedCount > 0 && (
+              <div
+                style={{ width: `${(analytics.notConnectedCount / total) * 100}%` }}
+                className="bg-orange-500 h-full transition-all duration-500 hover:opacity-90 relative group"
+                title={`Not Connected: ${analytics.notConnectedCount} (${analytics.statusPercentages['Not Connected']}%)`}
               />
             )}
             {analytics.interestedCount > 0 && (
@@ -320,6 +343,10 @@ export const DashboardModule = ({ onOpenUpload }) => {
               <span>Connected ({analytics.statusPercentages.Connected}%)</span>
             </span>
             <span className="flex items-center gap-1.5">
+              <span className="w-2.5 h-2.5 rounded-full bg-orange-500 font-semibold" />
+              <span>Not Connected ({analytics.statusPercentages['Not Connected']}%)</span>
+            </span>
+            <span className="flex items-center gap-1.5">
               <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 font-semibold" />
               <span>Interested ({analytics.statusPercentages.Interested}%)</span>
             </span>
@@ -334,8 +361,8 @@ export const DashboardModule = ({ onOpenUpload }) => {
           </div>
         </div>
 
-        {/* 5 Status Cards Grid (2-col mobile, 5-col desktop) */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5 sm:gap-3 pt-1">
+        {/* 6 Status Cards Grid (2-col mobile, 3-col sm, 6-col desktop) */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5 sm:gap-3 pt-1">
           {statuses.map((st) => {
             const Icon = st.icon;
             return (
@@ -409,9 +436,10 @@ export const DashboardModule = ({ onOpenUpload }) => {
                 <th className="py-3 px-3">Total Leads</th>
                 <th className="py-3 px-3 text-amber-700">1. Pending</th>
                 <th className="py-3 px-3 text-blue-700">2. Connected</th>
-                <th className="py-3 px-3 text-emerald-700">3. Interested (Hot)</th>
-                <th className="py-3 px-3 text-rose-700">4. Not Interested</th>
-                <th className="py-3 px-3 text-slate-700">5. 📵 Not on WA</th>
+                <th className="py-3 px-3 text-orange-700">3. Not Connected</th>
+                <th className="py-3 px-3 text-emerald-700">4. Interested</th>
+                <th className="py-3 px-3 text-rose-700">5. Not Int.</th>
+                <th className="py-3 px-3 text-slate-700">6. 📵 Not on WA</th>
                 <th className="py-3 px-4 text-right">Interest Rate</th>
               </tr>
             </thead>
@@ -442,6 +470,10 @@ export const DashboardModule = ({ onOpenUpload }) => {
 
                   <td className="py-3 px-3 font-semibold text-blue-600">
                     {agent.connected}
+                  </td>
+
+                  <td className="py-3 px-3 font-semibold text-orange-600">
+                    {agent.notConnected || 0}
                   </td>
 
                   <td className="py-3 px-3 font-bold text-emerald-600">

@@ -16,6 +16,13 @@ export const STATUS_CONFIG = {
     borderLeftClass: "border-l-blue-500",
     description: "Initial contact established"
   },
+  "Not Connected": {
+    label: "Not Connected",
+    badgeClass: "bg-orange-50 text-orange-700 border-orange-200 ring-orange-500/10",
+    dotClass: "bg-orange-500",
+    borderLeftClass: "border-l-orange-500",
+    description: "Call placed but did not connect (no answer / busy)"
+  },
   "Follow-up": {
     label: "Follow-up",
     badgeClass: "bg-purple-50 text-purple-700 border-purple-200 ring-purple-500/10",

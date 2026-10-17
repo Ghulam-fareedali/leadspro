@@ -242,7 +242,7 @@ export const TeamModule = () => {
                 </div>
 
                 {/* Status breakdown grid */}
-                <div className="grid grid-cols-2 gap-2 text-center text-xs pt-2 border-t border-slate-100">
+                <div className="grid grid-cols-3 gap-1.5 text-center text-xs pt-2 border-t border-slate-100">
                   <div className="bg-slate-50 p-2 rounded-lg border border-slate-100">
                     <span className="text-[10px] uppercase font-bold text-slate-400 block">Total</span>
                     <span className="text-base font-extrabold text-slate-800">{agent.totalLeads}</span>
@@ -255,9 +255,17 @@ export const TeamModule = () => {
                     <span className="text-[10px] uppercase font-bold text-blue-600 block">Connected</span>
                     <span className="text-base font-extrabold text-blue-700">{agent.connected}</span>
                   </div>
+                  <div className="bg-orange-50 p-2 rounded-lg border border-orange-100">
+                    <span className="text-[10px] uppercase font-bold text-orange-600 block">Not Conn.</span>
+                    <span className="text-base font-extrabold text-orange-700">{agent.notConnected || 0}</span>
+                  </div>
                   <div className="bg-emerald-50 p-2 rounded-lg border border-emerald-100">
                     <span className="text-[10px] uppercase font-bold text-emerald-600 block">Interested</span>
                     <span className="text-base font-extrabold text-emerald-700">{agent.interested}</span>
+                  </div>
+                  <div className="bg-rose-50 p-2 rounded-lg border border-rose-100">
+                    <span className="text-[10px] uppercase font-bold text-rose-600 block">Not Int.</span>
+                    <span className="text-base font-extrabold text-rose-700">{agent.notInterested}</span>
                   </div>
                 </div>
 

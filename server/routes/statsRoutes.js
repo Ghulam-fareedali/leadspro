@@ -15,8 +15,10 @@ router.get('/', async (req, res) => {
 
     const pendingCount = await Lead.countDocuments({ status: 'Pending' });
     const connectedCount = await Lead.countDocuments({ status: 'Connected' });
+    const notConnectedCount = await Lead.countDocuments({ status: 'Not Connected' });
     const interestedCount = await Lead.countDocuments({ status: 'Interested' });
     const notInterestedCount = await Lead.countDocuments({ status: 'Not Interested' });
+    const notOnWhatsAppCount = await Lead.countDocuments({ status: 'Not on WhatsApp' });
 
     const interestRate = totalLeadsAssigned > 0
       ? Math.round((interestedCount / totalLeadsAssigned) * 100)
@@ -33,8 +35,10 @@ router.get('/', async (req, res) => {
         const total = await Lead.countDocuments({ assignedAgent: agent.name });
         const pending = await Lead.countDocuments({ assignedAgent: agent.name, status: 'Pending' });
         const connected = await Lead.countDocuments({ assignedAgent: agent.name, status: 'Connected' });
+        const notConnected = await Lead.countDocuments({ assignedAgent: agent.name, status: 'Not Connected' });
         const interested = await Lead.countDocuments({ assignedAgent: agent.name, status: 'Interested' });
         const notInterested = await Lead.countDocuments({ assignedAgent: agent.name, status: 'Not Interested' });
+        const notOnWhatsApp = await Lead.countDocuments({ assignedAgent: agent.name, status: 'Not on WhatsApp' });
         const conversionRate = total > 0 ? Math.round((interested / total) * 100) : 0;
 
         return {
@@ -47,8 +51,10 @@ router.get('/', async (req, res) => {
           totalLeads: total,
           pending,
           connected,
+          notConnected,
           interested,
           notInterested,
+          notOnWhatsApp,
           conversionRate
         };
       })
@@ -64,8 +70,10 @@ router.get('/', async (req, res) => {
         assignedCustomersCount,
         pendingCount,
         connectedCount,
+        notConnectedCount,
         interestedCount,
         notInterestedCount,
+        notOnWhatsAppCount,
         interestRate,
         contactRate,
         agentBreakdown

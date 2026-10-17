@@ -855,6 +855,7 @@ export const CrmProvider = ({ children }) => {
 
     const pendingCount = leads.filter(l => l.status === 'Pending').length;
     const connectedCount = leads.filter(l => l.status === 'Connected').length;
+    const notConnectedCount = leads.filter(l => l.status === 'Not Connected').length;
     const interestedCount = leads.filter(l => l.status === 'Interested').length;
     const notInterestedCount = leads.filter(l => l.status === 'Not Interested').length;
     const notOnWhatsAppCount = leads.filter(l => l.status === 'Not on WhatsApp').length;
@@ -870,6 +871,7 @@ export const CrmProvider = ({ children }) => {
     const statusPercentages = {
       Pending: totalLeadsAssigned > 0 ? Math.round((pendingCount / totalLeadsAssigned) * 100) : 0,
       Connected: totalLeadsAssigned > 0 ? Math.round((connectedCount / totalLeadsAssigned) * 100) : 0,
+      'Not Connected': totalLeadsAssigned > 0 ? Math.round((notConnectedCount / totalLeadsAssigned) * 100) : 0,
       Interested: totalLeadsAssigned > 0 ? Math.round((interestedCount / totalLeadsAssigned) * 100) : 0,
       'Not Interested': totalLeadsAssigned > 0 ? Math.round((notInterestedCount / totalLeadsAssigned) * 100) : 0,
       'Not on WhatsApp': totalLeadsAssigned > 0 ? Math.round((notOnWhatsAppCount / totalLeadsAssigned) * 100) : 0,
@@ -880,6 +882,7 @@ export const CrmProvider = ({ children }) => {
       const total = agentLeads.length;
       const pending = agentLeads.filter(l => l.status === 'Pending').length;
       const connected = agentLeads.filter(l => l.status === 'Connected').length;
+      const notConnected = agentLeads.filter(l => l.status === 'Not Connected').length;
       const interested = agentLeads.filter(l => l.status === 'Interested').length;
       const notInterested = agentLeads.filter(l => l.status === 'Not Interested').length;
       const notOnWhatsApp = agentLeads.filter(l => l.status === 'Not on WhatsApp').length;
@@ -890,6 +893,7 @@ export const CrmProvider = ({ children }) => {
         totalLeads: total,
         pending,
         connected,
+        notConnected,
         interested,
         notInterested,
         notOnWhatsApp,
@@ -904,6 +908,7 @@ export const CrmProvider = ({ children }) => {
       assignedCustomersCount,
       pendingCount,
       connectedCount,
+      notConnectedCount,
       interestedCount,
       notInterestedCount,
       notOnWhatsAppCount,

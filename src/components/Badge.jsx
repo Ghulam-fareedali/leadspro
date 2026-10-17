@@ -1,10 +1,11 @@
 import React from 'react';
 import { STATUS_CONFIG } from '../data/mockData';
-import { Clock, PhoneCall, Calendar, CheckCircle2, XCircle } from 'lucide-react';
+import { Clock, PhoneCall, PhoneMissed, Calendar, CheckCircle2, XCircle } from 'lucide-react';
 
 const ICONS = {
   Pending: Clock,
   'Call Done': PhoneCall,
+  'Not Connected': PhoneMissed,
   'Follow-up': Calendar,
   Converted: CheckCircle2,
   Dead: XCircle,
